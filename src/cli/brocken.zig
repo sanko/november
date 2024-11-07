@@ -1,6 +1,30 @@
 const std = @import("std");
+const heap = std.heap;
+const process = std.process;
+const mem = std.mem;
+const builtin = @import("builtin");
 
-pub fn main() !void {
+const cmdline = @import("commandline.zig");
+
+const Option = enum {
+    None,
+    Some,
+};
+
+const Arguments = enum { @"-e", @"-E" };
+
+pub fn main() (error{ OutOfMemory, Overflow, InvalidUsage } || std.fs.File.OpenError || std.fs.File.ReadError || std.fs.File.WriteError)!void {
+    const args = try cmdline.argv();
+
+    std.debug.print("exe: {?s}\n", .{args.exe});
+
+    if (mem.eql(u8, args.cmd.?, "run")) {
+        std.debug.print("command is {?s}\n", .{args.cmd});
+        for (args.argv.items) |arg| {
+            std.debug.print("   arg: {s}\n", .{arg});
+        }
+    }
+
     // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
     std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
 
