@@ -6,168 +6,161 @@ const mem = std.mem;
 const debug = std.debug;
 const io = std.io;
 const builtin = @import("builtin");
+const native_os = builtin.os.tag;
 
-pub const Args = struct {
-    exe: ?[]const u8,
-    cmd: ?[]const u8,
-    argv: std.ArrayList([]const u8),
-    // args: ?std.ArrayList(u8) = null,
-};
+pub fn argv() !void {
+    var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
-fn display_help(exe: ?[]const u8) !void {
-    std.debug.print("Usage: {?s} [command]\n", .{exe});
-    std.debug.print("\nOptions:\n", .{});
-    std.debug.print("  -e, -E  Enable/disable feature E\n", .{});
-    std.debug.print("  -w, -s  Enable/disable features W and S\n", .{});
-    std.debug.print("  -f FILE  Specify input file\n", .{});
-    std.debug.print("  -h, --help  Print this help message\n", .{});
-    std.debug.print("\nCommands:\n", .{});
-    std.debug.print("  command1  Description of command 1\n", .{});
-    std.debug.print("  command2  Description of command 2\n", .{});
+    const use_gpa = (!builtin.link_libc) and native_os != .wasi;
+    const gpa = gpa: {
+        if (native_os == .wasi) {
+            break :gpa std.heap.wasm_allocator;
+        }
+        if (use_gpa) {
+            break :gpa general_purpose_allocator.allocator();
+        }
+        // We would prefer to use raw libc allocator here, but cannot
+        // use it if it won't support the alignment we need.
+        if (@alignOf(std.c.max_align_t) < @max(@alignOf(i128), std.atomic.cache_line)) {
+            break :gpa std.heap.c_allocator;
+        }
+        break :gpa std.heap.raw_c_allocator;
+    };
+    defer if (use_gpa) {
+        _ = general_purpose_allocator.deinit();
+    };
+    var arena_instance = std.heap.ArenaAllocator.init(gpa);
+    defer arena_instance.deinit();
+    const arena = arena_instance.allocator();
 
-    std.process.exit(0);
+    const args = try process.argsAlloc(arena);
+    const env_map = try process.getEnvMap(arena);
+
+    return mainArgs(gpa, arena, args, env_map);
 }
 
-pub fn argv() (error{ OutOfMemory, Overflow, InvalidUsage })!Args {
-    const alloc = init: { // https://zig.guide/standard-library/allocators
-        if (builtin.is_test) {
-            break :init std.testing.allocator;
-        } else if (builtin.os.tag == .wasi) {
-            var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
-            break :init general_purpose_allocator.allocator();
-        } else {
-            break :init heap.page_allocator;
-        }
-    };
+test "wow" {
+    const gpa = std.testing.allocator;
+    var arena_instance = std.heap.ArenaAllocator.init(gpa);
+    defer arena_instance.deinit();
+    const arena = arena_instance.allocator();
+    const args = &.{ "fake.exe", "help", "c", "d" };
+    try std.testing.expectEqual(1, 1);
+    const env_map = try process.getEnvMap(arena);
+    try mainArgs(gpa, arena, args, env_map);
+    try std.testing.expectEqual(1, 1);
+}
 
-    var args = try process.argsWithAllocator(alloc);
+const usage =
+    \\Usage: brocken [command] [options]
+    \\
+    \\Commands:
+    \\
+    \\  build            Build project from meta.json
+    \\  fetch            Copy a package into global cache and print its hash
+    \\  init             Initialize a package in the current directory
+    \\
+    \\  build-exe        Create executable from source or object files
+    \\  build-lib        Create library from source or object files
+    \\  build-obj        Create object from source or object files
+    \\  test             Perform unit testing
+    \\  run              Create executable and run immediately
+    \\
+    \\  fmt              Reformat source into canonical form
+    \\
+    \\  env              Print lib path, std path, cache directory, and version
+    \\  help             Print this help and exit
+    \\  std              View standard library documentation in a browser
+    \\  version          Print version number and exit
+    \\
+    \\General Options:
+    \\
+    \\  -h, --help       Print command-specific usage
+    \\
+;
 
-    const exe = args.next();
-    const cmd = args.next() orelse {
-        return error.InvalidUsage;
-        // std.log.err("usage: {s} \"[command]\"", .{exe.?});
-        // std.process.exit(0);
-    };
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
+fn mainArgs(gpa: mem.Allocator, arena: mem.Allocator, args: []const []const u8, env: process.EnvMap) !void {
+    // const tr = tracy.trace(@src());
+    // defer tr.end();
+    _ = gpa;
 
-    var result: Args = .{ .exe = exe, .cmd = cmd, .argv = std.ArrayList([]const u8).init(allocator) };
-    // defer result.argv.deinit();
-
-    while (args.next()) |arg| {
-        try result.argv.append(arg);
+    if (args.len <= 1 and !builtin.is_test) {
+        std.log.info("{s}", .{usage});
+        fatalWithHint("expected command argument", .{});
     }
 
-    if (mem.eql(u8, cmd, "build")) {} else if (mem.eql(u8, cmd, "clean")) {} else if (mem.eql(u8, cmd, "docs")) {} else if (mem.eql(u8, cmd, "env")) {} else if (mem.eql(u8, cmd, "fmt")) {} else if (mem.eql(u8, cmd, "help")) {
-        try display_help(exe);
-    } else if (mem.eql(u8, cmd, "install")) {} else if (mem.eql(u8, cmd, "run")) {} else if (mem.eql(u8, cmd, "repl")) {} else if (mem.eql(u8, cmd, "new")) {} else if (mem.eql(u8, cmd, "test")) {} else if (mem.eql(u8, cmd, "version")) {}
+    if (process.can_execv and std.posix.getenvZ("ZIG_IS_DETECTING_LIBC_PATHS") != null) {
+        // dev.check(.cc_command);
+        // In this case we have accidentally invoked ourselves as "the system C compiler"
+        // to figure out where libc is installed. This is essentially infinite recursion
+        // via child process execution due to the CC environment variable pointing to Zig.
+        // Here we ignore the CC environment variable and exec `cc` as a child process.
+        // However it's possible Zig is installed as *that* C compiler as well, which is
+        // why we have this additional environment variable here to check.
 
-    // defer result.argv.deinit();
-
-    return result;
-}
-
-pub const Init = struct { cmd: []const u8, exe: []const u8, verbose: bool = false, prefix: ?[]const u8 = null, argv: ?[]const []const u8 = null };
-
-pub fn argv_2() !void {
-    const alloc = init: { // https://zig.guide/standard-library/allocators
-        if (builtin.is_test) {
-            break :init std.testing.allocator;
-        } else if (builtin.os.tag == .wasi) {
-            var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
-            break :init general_purpose_allocator.allocator();
-        } else {
-            break :init heap.page_allocator;
+        const inf_loop_env_key = "ZIG_IS_TRYING_TO_NOT_CALL_ITSELF";
+        if (env.get(inf_loop_env_key) != null) {
+            fatalWithHint("The compilation links against libc, but Zig is unable to provide a libc " ++
+                "for this operating system, and no --libc " ++
+                "parameter was provided, so Zig attempted to invoke the system C compiler " ++
+                "in order to determine where libc is installed. However the system C " ++
+                "compiler is `zig cc`, so no libc installation was found.", .{});
         }
-    };
+        try env.put(inf_loop_env_key, "1");
 
-    const args = try process.argsAlloc(alloc);
-    defer process.argsFree(alloc, args);
-
-    // skip my own exe name
-    var arg_idx: usize = 0;
-
-    var builder = Init{
-        .exe = nextArg(args, &arg_idx) orelse
-            fatalWithHint("missing compiler path", .{}),
-        .cmd = nextArg(args, &arg_idx) orelse
-            fatalWithHint("missing compiler command", .{}),
-        .argv =
-
-        //  std.ArrayList([]const u8).init(alloc)
-
-        argsRest(args, arg_idx),
-    };
-    // defer builder.deinit();
-
-    std.debug.print("exe: {s}\n", .{builder.exe});
-    std.debug.print("cmd: {s}\n", .{builder.cmd});
-
-    var output_tmp_nonce: ?[16]u8 = null;
-    var help_menu: bool = false;
-
-    while (nextArg(args, &arg_idx)) |arg| {
-        std.debug.print("arg[{}]: {s}\n", .{ arg_idx, builder.exe });
-        if (mem.startsWith(u8, arg, "-Z")) {
-            if (arg.len != 18) fatalWithHint("bad argument: '{s}'", .{arg});
-            output_tmp_nonce = arg[2..18].*;
-        } else if (mem.startsWith(u8, arg, "-")) {
-            if (mem.eql(u8, arg, "--verbose")) {
-                builder.verbose = true;
-            } else if (mem.eql(u8, arg, "-h") or mem.eql(u8, arg, "--help")) {
-                help_menu = true;
-            }
-            // else if (mem.eql(u8, arg, "-I") or mem.eql(u8, arg, "--prefix")) {
-            //     builder.prefix = nextArgOrFatal(args, &arg_idx);
-            // }
-            else {
-                fatalWithHint("unrecognized argument: '{s}'", .{arg});
-            }
+        // Some programs such as CMake will strip the `cc` and subsequent args from the
+        // CC environment variable. We detect and support this scenario here because of
+        // the ZIG_IS_DETECTING_LIBC_PATHS environment variable.
+        if (mem.eql(u8, args[1], "cc")) {
+            //return process.execve(arena, args[1..], &env);
         } else {
-            // try builder.argv.append(arg);
+            const modified_args = try arena.dupe([]const u8, args);
+            modified_args[0] = "cc";
+            //return process.execve(arena, modified_args, &env);
         }
     }
 
-    //
-    const stdout_writer = io.getStdOut().writer();
+    const cmd = args[1];
+    const cmd_args = args[2..];
 
-    if (help_menu)
-        return usage(builder, stdout_writer);
+    // std.debug.print("cmd: {s}\n", .{cmd});
+
+    if (cmd_args.len > 0 and std.mem.eql(u8, cmd_args[0], "--zig-integration")) {}
+
+    if (mem.eql(u8, cmd, "build-exe")) {
+
+        //return try process.execve(arena, modified_args, &env);
+        // dev.check(.build_exe_command);
+        // return buildOutputType(gpa, arena, args, .{ .build = .Exe });
+    }
+    if (mem.eql(u8, cmd, "build-lib")) {
+        // dev.check(.build_lib_command);
+        // return buildOutputType(gpa, arena, args, .{ .build = .Lib });
+    } else if (mem.eql(u8, cmd, "version")) {
+        // dev.check(.version_command);
+        // try std.io.getStdOut().writeAll(build_options.version ++ "\n");
+        // Check libc++ linkage to make sure Zig was built correctly, but only
+        // for "env" and "version" to avoid affecting the startup time for
+        // build-critical commands (check takes about ~10 μs)
+        // return verifyLibcxxCorrectlyLinked();
+    } else if (mem.eql(u8, cmd, "env")) {
+        // dev.check(.env_command);
+        // verifyLibcxxCorrectlyLinked();
+        // return @import("print_env.zig").cmdEnv(arena, cmd_args, io.getStdOut().writer());
+    } else if (mem.eql(u8, cmd, "help") or mem.eql(u8, cmd, "-h") or mem.eql(u8, cmd, "--help")) {
+        // dev.check(.help_command);
+        // return io.getStdOut().writeAll(usage);
+    } else {
+        std.log.info("{s}", .{usage});
+        fatalWithHint("unknown command: {s}", .{args[1]});
+    }
 }
 
-test "Here we go..." {
-    return;
-}
-
-fn nextArg(args: [][:0]const u8, idx: *usize) ?[:0]const u8 {
-    if (idx.* >= args.len) return null;
-    defer idx.* += 1;
-    return args[idx.*];
-}
-
-fn nextArgOrFatal(args: [][:0]const u8, idx: *usize) [:0]const u8 {
-    return nextArg(args, idx) orelse {
-        std.debug.print("expected argument after '{s}'\n  access the help menu with 'zig build -h'\n", .{args[idx.* - 1]});
-        process.exit(1);
-    };
-}
-
-fn argsRest(args: [][:0]const u8, idx: usize) ?[][:0]const u8 {
-    if (idx >= args.len) return null;
-    return args[idx..];
-}
-
-/// Perhaps in the future there could be an Advanced Options flag such as
-/// --debug-build-runner-leaks which would make this function return instead of
-/// calling exit.
 fn cleanExit() void {
     std.debug.lockStdErr();
     process.exit(0);
 }
 
-/// Perhaps in the future there could be an Advanced Options flag such as
-/// --debug-build-runner-leaks which would make this function return instead of
-/// calling exit.
 fn uncleanExit() error{UncleanExit} {
     std.debug.lockStdErr();
     process.exit(1);
@@ -176,141 +169,4 @@ fn uncleanExit() error{UncleanExit} {
 fn fatalWithHint(comptime f: []const u8, args: anytype) noreturn {
     std.debug.print(f ++ "\n  access the help menu with 'brocken help'\n", args);
     process.exit(1);
-}
-
-fn usage(b: Init, out_stream: anytype) !void {
-    try out_stream.print(
-        \\Usage: {s} [command] [options]
-        \\
-        \\Steps:
-        \\
-    , .{b.exe});
-    // for (b.argv) |arg| {
-    // try out_stream.print("item: {s}", .{arg});
-    // }
-    // try steps(b, out_stream);
-
-    // try out_stream.writeAll(
-    //     \\
-    //     \\General Options:
-    //     \\  -p, --prefix [path]          Where to install files (default: zig-out)
-    //     \\  --prefix-lib-dir [path]      Where to install libraries
-    //     \\  --prefix-exe-dir [path]      Where to install executables
-    //     \\  --prefix-include-dir [path]  Where to install C header files
-    //     \\
-    //     \\  --release[=mode]             Request release mode, optionally specifying a
-    //     \\                               preferred optimization mode: fast, safe, small
-    //     \\
-    //     \\  -fdarling,  -fno-darling     Integration with system-installed Darling to
-    //     \\                               execute macOS programs on Linux hosts
-    //     \\                               (default: no)
-    //     \\  -fqemu,     -fno-qemu        Integration with system-installed QEMU to execute
-    //     \\                               foreign-architecture programs on Linux hosts
-    //     \\                               (default: no)
-    //     \\  --glibc-runtimes [path]      Enhances QEMU integration by providing glibc built
-    //     \\                               for multiple foreign architectures, allowing
-    //     \\                               execution of non-native programs that link with glibc.
-    //     \\  -frosetta,  -fno-rosetta     Rely on Rosetta to execute x86_64 programs on
-    //     \\                               ARM64 macOS hosts. (default: no)
-    //     \\  -fwasmtime, -fno-wasmtime    Integration with system-installed wasmtime to
-    //     \\                               execute WASI binaries. (default: no)
-    //     \\  -fwine,     -fno-wine        Integration with system-installed Wine to execute
-    //     \\                               Windows programs on Linux hosts. (default: no)
-    //     \\
-    //     \\  -h, --help                   Print this help and exit
-    //     \\  -l, --list-steps             Print available steps
-    //     \\  --verbose                    Print commands before executing them
-    //     \\  --color [auto|off|on]        Enable or disable colored error messages
-    //     \\  --prominent-compile-errors   Buffer compile errors and display at end
-    //     \\  --summary [mode]             Control the printing of the build summary
-    //     \\    all                        Print the build summary in its entirety
-    //     \\    new                        Omit cached steps
-    //     \\    failures                   (Default) Only print failed steps
-    //     \\    none                       Do not print the build summary
-    //     \\  -j<N>                        Limit concurrent jobs (default is to use all CPU cores)
-    //     \\  --maxrss <bytes>             Limit memory usage (default is to use available memory)
-    //     \\  --skip-oom-steps             Instead of failing, skip steps that would exceed --maxrss
-    //     \\  --fetch                      Exit after fetching dependency tree
-    //     \\  --watch                      Continuously rebuild when source files are modified
-    //     \\  --fuzz                       Continuously search for unit test failures
-    //     \\  --debounce <ms>              Delay before rebuilding after changed file detected
-    //     \\     -fincremental             Enable incremental compilation
-    //     \\  -fno-incremental             Disable incremental compilation
-    //     \\
-    //     \\Project-Specific Options:
-    //     \\
-    // );
-
-    // const arena = b.allocator;
-    // if (b.available_options_list.items.len == 0) {
-    //     try out_stream.print("  (none)\n", .{});
-    // } else {
-    //     for (b.available_options_list.items) |option| {
-    //         const name = try fmt.allocPrint(arena, "  -D{s}=[{s}]", .{
-    //             option.name,
-    //             @tagName(option.type_id),
-    //         });
-    //         try out_stream.print("{s:<30} {s}\n", .{ name, option.description });
-    //         if (option.enum_options) |enum_options| {
-    //             const padding = " " ** 33;
-    //             try out_stream.writeAll(padding ++ "Supported Values:\n");
-    //             for (enum_options) |enum_option| {
-    //                 try out_stream.print(padding ++ "  {s}\n", .{enum_option});
-    //             }
-    //         }
-    //     }
-    // }
-
-    // try out_stream.writeAll(
-    //     \\
-    //     \\System Integration Options:
-    //     \\  --search-prefix [path]       Add a path to look for binaries, libraries, headers
-    //     \\  --sysroot [path]             Set the system root directory (usually /)
-    //     \\  --libc [file]                Provide a file which specifies libc paths
-    //     \\
-    //     \\  --system [pkgdir]            Disable package fetching; enable all integrations
-    //     \\  -fsys=[name]                 Enable a system integration
-    //     \\  -fno-sys=[name]              Disable a system integration
-    //     \\
-    //     \\  Available System Integrations:                Enabled:
-    //     \\
-    // );
-    // if (b.graph.system_library_options.entries.len == 0) {
-    //     try out_stream.writeAll("  (none)                                        -\n");
-    // } else {
-    //     for (b.graph.system_library_options.keys(), b.graph.system_library_options.values()) |k, v| {
-    //         const status = switch (v) {
-    //             .declared_enabled => "yes",
-    //             .declared_disabled => "no",
-    //             .user_enabled, .user_disabled => unreachable, // already emitted error
-    //         };
-    //         try out_stream.print("    {s:<43} {s}\n", .{ k, status });
-    //     }
-    // }
-
-    // try out_stream.writeAll(
-    //     \\
-    //     \\Advanced Options:
-    //     \\  -freference-trace[=num]      How many lines of reference trace should be shown per compile error
-    //     \\  -fno-reference-trace         Disable reference trace
-    //     \\  -fallow-so-scripts           Allows .so files to be GNU ld scripts
-    //     \\  -fno-allow-so-scripts        (default) .so files must be ELF files
-    //     \\  --build-file [file]          Override path to build.zig
-    //     \\  --cache-dir [path]           Override path to local Zig cache directory
-    //     \\  --global-cache-dir [path]    Override path to global Zig cache directory
-    //     \\  --zig-lib-dir [arg]          Override path to Zig lib directory
-    //     \\  --build-runner [file]        Override path to build runner
-    //     \\  --seed [integer]             For shuffling dependency traversal order (default: random)
-    //     \\  --debug-log [scope]          Enable debugging the compiler
-    //     \\  --debug-pkg-config           Fail if unknown pkg-config flags encountered
-    //     \\  --debug-rt                   Debug compiler runtime libraries
-    //     \\  --verbose-link               Enable compiler debug output for linking
-    //     \\  --verbose-air                Enable compiler debug output for Zig AIR
-    //     \\  --verbose-llvm-ir[=file]     Enable compiler debug output for LLVM IR
-    //     \\  --verbose-llvm-bc=[file]     Enable compiler debug output for LLVM BC
-    //     \\  --verbose-cimport            Enable compiler debug output for C imports
-    //     \\  --verbose-cc                 Enable compiler debug output for C compilation
-    //     \\  --verbose-llvm-cpu-features  Enable compiler debug output for LLVM CPU features
-    //     \\
-    // );
 }
