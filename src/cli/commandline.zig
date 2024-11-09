@@ -38,54 +38,46 @@ pub fn argv() !void {
 
     return mainArgs(gpa, arena, args, env_map);
 }
-
-test "wow" {
+test "help" {
     const gpa = std.testing.allocator;
     var arena_instance = std.heap.ArenaAllocator.init(gpa);
     defer arena_instance.deinit();
     const arena = arena_instance.allocator();
-    const args = &.{ "fake.exe", "help", "c", "d" };
+    const args = &.{ "fake.exe", "help" };
     try std.testing.expectEqual(1, 1);
     const env_map = try process.getEnvMap(arena);
     try mainArgs(gpa, arena, args, env_map);
     try std.testing.expectEqual(1, 1);
 }
-
-const usage =
-    \\Usage: brocken [command] [options]
-    \\
-    \\Commands:
-    \\
-    \\  build            Build project from meta.json
-    \\  fetch            Copy a package into global cache and print its hash
-    \\  init             Initialize a package in the current directory
-    \\
-    \\  build-exe        Create executable from source or object files
-    \\  build-lib        Create library from source or object files
-    \\  build-obj        Create object from source or object files
-    \\  test             Perform unit testing
-    \\  run              Create executable and run immediately
-    \\
-    \\  fmt              Reformat source into canonical form
-    \\
-    \\  env              Print lib path, std path, cache directory, and version
-    \\  help             Print this help and exit
-    \\  std              View standard library documentation in a browser
-    \\  version          Print version number and exit
-    \\
-    \\General Options:
-    \\
-    \\  -h, --help       Print command-specific usage
-    \\
-;
-
+test "help help" {
+    const gpa = std.testing.allocator;
+    var arena_instance = std.heap.ArenaAllocator.init(gpa);
+    defer arena_instance.deinit();
+    const arena = arena_instance.allocator();
+    const args = &.{ "fake.exe", "help", "help" };
+    try std.testing.expectEqual(1, 1);
+    const env_map = try process.getEnvMap(arena);
+    try mainArgs(gpa, arena, args, env_map);
+    try std.testing.expectEqual(1, 1);
+}
+test "help run" {
+    const gpa = std.testing.allocator;
+    var arena_instance = std.heap.ArenaAllocator.init(gpa);
+    defer arena_instance.deinit();
+    const arena = arena_instance.allocator();
+    const args = &.{ "fake.exe", "help", "run" };
+    try std.testing.expectEqual(1, 1);
+    const env_map = try process.getEnvMap(arena);
+    try mainArgs(gpa, arena, args, env_map);
+    try std.testing.expectEqual(1, 1);
+}
 fn mainArgs(gpa: mem.Allocator, arena: mem.Allocator, args: []const []const u8, env: process.EnvMap) !void {
     // const tr = tracy.trace(@src());
     // defer tr.end();
     _ = gpa;
 
     if (args.len <= 1 and !builtin.is_test) {
-        std.log.info("{s}", .{usage});
+        usage(args[0], null);
         fatalWithHint("expected command argument", .{});
     }
 
@@ -148,10 +140,20 @@ fn mainArgs(gpa: mem.Allocator, arena: mem.Allocator, args: []const []const u8, 
         // verifyLibcxxCorrectlyLinked();
         // return @import("print_env.zig").cmdEnv(arena, cmd_args, io.getStdOut().writer());
     } else if (mem.eql(u8, cmd, "help") or mem.eql(u8, cmd, "-h") or mem.eql(u8, cmd, "--help")) {
+        std.log.info("arg count: {}", .{cmd_args.len});
+
+        var help: ?[]const u8 = null;
+        if (cmd_args.len > 0) {
+            help = args[2];
+        }
+
+        usage(args[0], help);
+
         // dev.check(.help_command);
         // return io.getStdOut().writeAll(usage);
     } else {
-        std.log.info("{s}", .{usage});
+        // std.debug.print("{s}", .{usage});
+        usage(args[0], null);
         fatalWithHint("unknown command: {s}", .{args[1]});
     }
 }
@@ -169,4 +171,86 @@ fn uncleanExit() error{UncleanExit} {
 fn fatalWithHint(comptime f: []const u8, args: anytype) noreturn {
     std.debug.print(f ++ "\n  access the help menu with 'brocken help'\n", args);
     process.exit(1);
+}
+
+const usage_base =
+    \\Brocken. Squint.
+    \\Usage: {?s} [command] [options]
+    \\
+    \\Commands:
+    \\
+    \\  run              Create executable and run immediately 
+    \\  repl             Run a REPL. Same as running without a command
+    \\ 
+    \\  build            Build project from meta.json
+    \\  fetch            Copy a package into global cache and print its hash
+    \\  init             Initialize a package in the current directory
+    \\  doc              Display documentation for a package or symbol
+    \\
+    \\  build-exe        Create executable from source or object files
+    \\  build-lib        Create library from source or object files
+    \\  build-obj        Create object from source or object files
+    \\  test             Perform unit testing
+    \\
+    \\  fmt              Reformat source into canonical form
+    \\
+    \\  env              Print lib path, std path, cache directory, and version
+    \\  help             Print this help and exit
+    \\  std              View standard library documentation in a browser
+    \\  version          Print version number and exit
+    \\
+    \\General Options:
+    \\
+    \\  -h, --help       Print command-specific usage
+    \\
+;
+
+const usage_repl =
+    \\Brocken. Squint.
+    \\Usage: {?s} repl [options]
+    \\
+    \\Run a REPL. Same as running without a command
+    \\
+    \\General Options:
+    \\
+    \\  -h, --help       Print command-specific usage
+    \\
+;
+
+const usage_run =
+    \\Brocken. Squint.
+    \\Usage: {?s} run [options]
+    \\
+    \\Create executable and run immediately 
+    \\
+    \\General Options:
+    \\
+    \\  -h, --help       Print command-specific usage
+    \\
+;
+
+fn usage(exe: []const u8, cmd: ?[]const u8) void {
+    std.debug.print("exe: {?s}\n", .{exe});
+    std.debug.print("cmd: {?s}\n", .{cmd});
+
+    if (cmd) |a| {
+        if (mem.eql(u8, a, "repl")) {
+            return std.debug.print(usage_repl, .{exe});
+        }
+        if (mem.eql(u8, a, "run")) {
+            return std.debug.print(usage_run, .{exe});
+        }
+    }
+
+    return std.debug.print(usage_base, .{exe});
+
+    // if (mem.eql(u8, cmd, "env")) {
+    //     return std.log.info("{s}", .{exe});
+    // }
+    // if (mem.eql(u8, cmd, "env")) {
+    //     return std.log.info("{s}", .{exe});
+    // }
+    // if (mem.eql(u8, cmd, "env")) {
+    //     return std.log.info("{s}", .{exe});
+    // }
 }

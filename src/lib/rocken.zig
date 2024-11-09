@@ -8,23 +8,6 @@ const testing = std.testing;
 const filesystem = std.fs;
 const heap = std.heap;
 
-export fn add(a: i32, b: i32) i32 {
-    return a + b;
-}
-
-test "basic add functionality" {
-    try testing.expect(add(3, 7) == 10);
-}
-
-export fn multiply(a: i32, b: i32) i32 {
-    return a * b;
-}
-
-test "basic mult functionality" {
-    const result = multiply(5, 3);
-    try testing.expect(result == 15);
-}
-
 pub const TokenType = enum {
     // Single-character tokens.
     LeftParen,
