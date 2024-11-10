@@ -1,4 +1,5 @@
 const std = @import("std");
+const ascii = std.ascii;
 const testing = std.testing;
 
 pub fn is_digit(c: u8) bool {
@@ -11,27 +12,53 @@ test "is_digit" {
 }
 
 pub fn is_alpha(c: u8) bool {
-    return (c >= 'a' and c <= 'z') or
-        (c >= 'A' and c <= 'Z') or
-        c == '_';
+    return ascii.isAlphabetic(c)
+    // or c == '_'
+    ;
 }
 
 test "is_alpha" {
     try testing.expect(is_alpha('A') == true);
-    try testing.expect(is_alpha('_') == true);
+    try testing.expect(is_alpha('_') == false);
     try testing.expect(is_alpha('1') == false);
     try testing.expect(is_alpha(' ') == false);
+}
+
+pub fn is_graphical(c: u8) bool {
+    return c <= 0x7e and (c >= (' ' + 1));
+}
+test "is_graphical" {
+    try testing.expect(is_graphical('A') == true);
+    try testing.expect(is_graphical('_') == true);
+    try testing.expect(is_graphical('1') == true);
+    try testing.expect(is_graphical(' ') == false);
+    try testing.expect(is_graphical(0x7f) == false);
+}
+
+pub fn is_lowercase(c: u8) bool {
+    return ascii.isLower(c);
+}
+
+test "is_lowercase" {
+    try testing.expect(is_lowercase('A') == false);
+    try testing.expect(is_lowercase('a') == true);
+}
+pub fn is_uppercase(c: u8) bool {
+    return ascii.isUpper(c);
+}
+test "is_uppercase" {
+    try testing.expect(is_uppercase('A') == true);
+    try testing.expect(is_uppercase('a') == false);
 }
 
 pub fn is_alphanumeric(c: u8) bool {
     return is_alpha(c) or is_digit(c);
 }
-
 test "is_alphanumeric" {
     try testing.expect(is_alphanumeric('A') == true);
     try testing.expect(is_alphanumeric('1') == true);
     try testing.expect(is_alphanumeric('A') == true);
-    try testing.expect(is_alphanumeric('_') == true);
+    try testing.expect(is_alphanumeric('_') == false);
     try testing.expect(is_alphanumeric(' ') == false);
 }
 

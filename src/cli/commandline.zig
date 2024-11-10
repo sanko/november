@@ -71,14 +71,16 @@ test "help run" {
     try mainArgs(gpa, arena, args, env_map);
     try std.testing.expectEqual(1, 1);
 }
+
 fn mainArgs(gpa: mem.Allocator, arena: mem.Allocator, args: []const []const u8, env: process.EnvMap) !void {
     // const tr = tracy.trace(@src());
     // defer tr.end();
     _ = gpa;
 
     if (args.len <= 1 and !builtin.is_test) {
-        usage(args[0], null);
-        fatalWithHint("expected command argument", .{});
+        // usage(args[0], null);
+        // fatal("TODO: kick off REPL", .{});
+        repl();
     }
 
     if (process.can_execv and std.posix.getenvZ("ZIG_IS_DETECTING_LIBC_PATHS") != null) {
@@ -151,6 +153,8 @@ fn mainArgs(gpa: mem.Allocator, arena: mem.Allocator, args: []const []const u8, 
 
         // dev.check(.help_command);
         // return io.getStdOut().writeAll(usage);
+    } else if (mem.eql(u8, cmd, "repl")) {
+        repl();
     } else {
         // std.debug.print("{s}", .{usage});
         usage(args[0], null);
@@ -173,76 +177,70 @@ fn fatalWithHint(comptime f: []const u8, args: anytype) noreturn {
     process.exit(1);
 }
 
-const usage_base =
-    \\Brocken. Squint.
-    \\Usage: {?s} [command] [options]
-    \\
-    \\Commands:
-    \\
-    \\  run              Create executable and run immediately 
-    \\  repl             Run a REPL. Same as running without a command
-    \\ 
-    \\  build            Build project from meta.json
-    \\  fetch            Copy a package into global cache and print its hash
-    \\  init             Initialize a package in the current directory
-    \\  doc              Display documentation for a package or symbol
-    \\
-    \\  build-exe        Create executable from source or object files
-    \\  build-lib        Create library from source or object files
-    \\  build-obj        Create object from source or object files
-    \\  test             Perform unit testing
-    \\
-    \\  fmt              Reformat source into canonical form
-    \\
-    \\  env              Print lib path, std path, cache directory, and version
-    \\  help             Print this help and exit
-    \\  std              View standard library documentation in a browser
-    \\  version          Print version number and exit
-    \\
-    \\General Options:
-    \\
-    \\  -h, --help       Print command-specific usage
-    \\
-;
-
-const usage_repl =
-    \\Brocken. Squint.
-    \\Usage: {?s} repl [options]
-    \\
-    \\Run a REPL. Same as running without a command
-    \\
-    \\General Options:
-    \\
-    \\  -h, --help       Print command-specific usage
-    \\
-;
-
-const usage_run =
-    \\Brocken. Squint.
-    \\Usage: {?s} run [options]
-    \\
-    \\Create executable and run immediately 
-    \\
-    \\General Options:
-    \\
-    \\  -h, --help       Print command-specific usage
-    \\
-;
-
 fn usage(exe: []const u8, cmd: ?[]const u8) void {
     std.debug.print("exe: {?s}\n", .{exe});
     std.debug.print("cmd: {?s}\n", .{cmd});
 
     if (cmd) |a| {
         if (mem.eql(u8, a, "repl")) {
-            return std.debug.print(usage_repl, .{exe});
+            return std.debug.print(
+                \\Brocken. Squint.
+                \\Usage: {?s} repl [options]
+                \\
+                \\Run a REPL. Same as running without a command
+                \\
+                \\General Options:
+                \\
+                \\  -h, --help       Print command-specific usage
+                \\    
+            , .{exe});
         }
         if (mem.eql(u8, a, "run")) {
-            return std.debug.print(usage_run, .{exe});
+            return std.debug.print(
+                \\Brocken. Squint.
+                \\Usage: {?s} run [options]
+                \\
+                \\Create executable and run immediately 
+                \\
+                \\General Options:
+                \\
+                \\  -h, --help       Print command-specific usage
+                \\
+            , .{exe});
         }
     }
 
-    return std.debug.print(usage_base, .{exe});
+    return std.debug.print(
+        \\Brocken. Squint.
+        \\Usage: {?s} [command] [options]
+        \\
+        \\Commands:
+        \\
+        \\  run              Create executable and run immediately 
+        \\  repl             Run a REPL. Same as running without a command
+        \\ 
+        \\  build            Build project from meta.json
+        \\  fetch            Copy a package into global cache and print its hash
+        \\  init             Initialize a package in the current directory
+        \\  doc              Display documentation for a package or symbol
+        \\
+        \\  build-exe        Create executable from source or object files
+        \\  build-lib        Create library from source or object files
+        \\  build-obj        Create object from source or object files
+        \\  test             Perform unit testing
+        \\
+        \\  fmt              Reformat source into canonical form
+        \\
+        \\  env              Print lib path, std path, cache directory, and version
+        \\  help             Print this help and exit
+        \\  std              View standard library documentation in a browser
+        \\  version          Print version number and exit
+        \\
+        \\General Options:
+        \\
+        \\  -h, --help       Print command-specific usage
+        \\
+    , .{exe});
 
     // if (mem.eql(u8, cmd, "env")) {
     //     return std.log.info("{s}", .{exe});
@@ -253,4 +251,26 @@ fn usage(exe: []const u8, cmd: ?[]const u8) void {
     // if (mem.eql(u8, cmd, "env")) {
     //     return std.log.info("{s}", .{exe});
     // }
+}
+
+fn repl() void {
+    var stdin = io.getStdIn();
+    // var stdout = io.getStdOut();
+    while (true) {
+        std.debug.print("> ", .{});
+        var line = mem.zeroes([1024]u8);
+        const n = stdin.read(&line);
+
+        if (n == error.ReadError) {
+            //break;
+            // if (n == 0) break;
+
+            cleanExit();
+        }
+
+        // ... (lex, parse, and interpret the input)
+        const result = line;
+        std.debug.print("{?s}\n", .{result});
+    }
+    return;
 }

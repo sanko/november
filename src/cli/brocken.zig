@@ -6,7 +6,7 @@ const builtin = @import("builtin");
 
 const cmdline = @import("commandline.zig");
 
-pub fn main() (error{ OutOfMemory, Overflow, InvalidUsage, FileSystem, InvalidExe, ExecvError } || std.fs.File.OpenError || std.fs.File.ReadError || std.fs.File.WriteError)!void {
+pub fn main() (error{ OutOfMemory, Overflow, InvalidUsage, FileSystem, InvalidExe, ExecvError, InvalidCharacter, DoesntTakeValue, MissingValue, MissingCommand, NameNotPartOfEnum, MissingArg1 } || std.fs.File.OpenError || std.fs.File.ReadError || std.fs.File.WriteError)!void {
     try cmdline.argv();
 
     const stdout_file = std.io.getStdOut().writer();

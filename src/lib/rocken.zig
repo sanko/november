@@ -16,6 +16,8 @@ const Scanner = @import("Scanner.zig");
 
 const builtin = @import("builtin");
 
+const version = std.SemanticVersion.parse("0.0.1-dev0");
+
 test "hello_world" {
     const alloc = init: { // https://zig.guide/standard-library/allocators
         if (builtin.is_test) {
