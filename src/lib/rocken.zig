@@ -9,19 +9,50 @@ const filesystem = std.fs;
 const heap = std.heap;
 
 pub const TokenType = enum {
-    // Single-character tokens.
-    LeftParen,
-    RightParen,
-    LeftBrace,
-    RightBrace,
+    // File tests -X
+    FT_A,
+    FT_B,
+    FT_b,
+    FT_C,
+    FT_c,
+    FT_d,
+    FT_e,
+    FT_f,
+    FT_g,
+    FT_k,
+    FT_l,
+    FT_M,
+    FT_O,
+    FT_o,
+    FT_p,
+    FT_r,
+    FT_R,
+    FT_S,
+    FT_s,
+    FT_T,
+    FT_t,
+    FT_u,
+    FT_w,
+    FT_W,
+    FT_X,
+    FT_x,
+    FT_z,
+    //
+    Ampersand,
+    AmpersandAmpersand,
+    OpenParen,
+    CloseParen,
+    OpenBrace,
+    CloseBrace,
     Comma,
+    FatComma,
     Dot,
     Minus,
     Plus,
     Semicolon,
     Slash,
     Star,
-    Ampersand,
+    Backtick,
 
     // One or two character tokens.
     Bang,
@@ -42,12 +73,14 @@ pub const TokenType = enum {
     // Keywords.
     And,
     Class,
+    Field,
+    Method,
     Else,
     False,
     For,
     Fun,
     If,
-    Nil,
+    Undef,
     Or,
     Print,
     Return,
@@ -109,7 +142,7 @@ end: [*]const u8,
 start: [*]const u8,
 current: [*]const u8,
 line: usize,
-pos: usize,
+column: usize,
 
 pub fn init(source: []const u8) Scanner {
     const start: [*]const u8 = @ptrCast(source);
@@ -118,15 +151,8 @@ pub fn init(source: []const u8) Scanner {
         .start = start,
         .current = @ptrCast(source),
         .line = 1,
-        .pos = 0,
+        .column = 0,
     };
-}
-
-test "basic scanner init" {
-    var scanner = init("&{}{}{}{}warn;'quoted text';m/match/;你好");
-    try testing.expect(scanner.line == 1);
-    scanner.scan();
-    try testing.expect(scanner.line == 1);
 }
 
 pub fn scan(self: *Scanner) void {
@@ -146,6 +172,13 @@ pub fn scan(self: *Scanner) void {
     }
 }
 
+test "basic scanner init" {
+    var scanner = init("&{}{}{}{}warn;'quoted text';m/match/;\nmy $file = '你好.txt'; -M $file;");
+    try testing.expect(scanner.line == 1);
+    scanner.scan();
+    try testing.expect(scanner.line == 2);
+}
+
 pub fn scan_token(self: *Scanner) Token {
     self.skip_whitespace();
     self.start = self.current;
@@ -157,24 +190,56 @@ pub fn scan_token(self: *Scanner) Token {
     if (is_alpha(c)) return self.identifier();
 
     switch (c) {
-        '&' => return self.make_token(TokenType.Ampersand),
-        '(' => return self.make_token(TokenType.LeftParen),
-        ')' => return self.make_token(TokenType.RightParen),
-        '{' => return self.make_token(TokenType.LeftBrace),
-        '}' => return self.make_token(TokenType.RightBrace),
+        '&' => return if (self.match('&')) self.make_token(TokenType.AmpersandAmpersand) else self.make_token(TokenType.Ampersand),
+        '(' => return self.make_token(TokenType.OpenParen),
+        ')' => return self.make_token(TokenType.CloseParen),
+        '{' => return self.make_token(TokenType.OpenBrace),
+        '}' => return self.make_token(TokenType.CloseBrace),
         ';' => return self.make_token(TokenType.Semicolon),
         ',' => return self.make_token(TokenType.Comma),
         '.' => return self.make_token(TokenType.Dot),
-        '-' => return self.make_token(TokenType.Minus),
+        '-' => {
+            if (@intFromPtr(self.current) - @intFromPtr(self.start) > 1) {
+                switch (self.start[1]) {
+                    'a' => return self.make_token(TokenType.FT_A),
+                    'C' => return self.make_token(TokenType.FT_C),
+                    'c' => return self.make_token(TokenType.FT_c),
+                    'd' => return self.make_token(TokenType.FT_d),
+                    'e' => return self.make_token(TokenType.FT_e),
+                    'f' => return self.make_token(TokenType.FT_f),
+                    'g' => return self.make_token(TokenType.FT_g),
+                    'k' => return self.make_token(TokenType.FT_k),
+                    'l' => return self.make_token(TokenType.FT_l),
+                    'M' => return self.make_token(TokenType.FT_M),
+                    'O' => return self.make_token(TokenType.FT_O),
+                    'o' => return self.make_token(TokenType.FT_o),
+                    'p' => return self.make_token(TokenType.FT_p),
+                    'r' => return self.make_token(TokenType.FT_r),
+                    'R' => return self.make_token(TokenType.FT_R),
+                    'S' => return self.make_token(TokenType.FT_S),
+                    's' => return self.make_token(TokenType.FT_s),
+                    'T' => return self.make_token(TokenType.FT_T),
+                    't' => return self.make_token(TokenType.FT_t),
+                    'u' => return self.make_token(TokenType.FT_u),
+                    'w' => return self.make_token(TokenType.FT_w),
+                    'W' => return self.make_token(TokenType.FT_W),
+                    'X' => return self.make_token(TokenType.FT_X),
+                    'x' => return self.make_token(TokenType.FT_x),
+                    'z' => return self.make_token(TokenType.FT_z),
+                    else => return self.make_token(TokenType.Identifier),
+                }
+            } else {
+                return self.make_token(TokenType.Minus);
+            }
+        },
         '+' => return self.make_token(TokenType.Plus),
         '/' => return self.make_token(TokenType.Slash),
         '*' => return self.make_token(TokenType.Star),
-
+        '`' => return self.make_token(TokenType.Backtick),
         '!' => return if (self.match('=')) self.make_token(TokenType.BangEqual) else self.make_token(TokenType.Bang),
-        '=' => return if (self.match('=')) self.make_token(TokenType.EqualEqual) else self.make_token(TokenType.Equal),
+        '=' => return if (self.match('=')) self.make_token(TokenType.EqualEqual) else if (self.match('>')) self.make_token(TokenType.EqualEqual) else self.make_token(TokenType.Equal),
         '<' => return if (self.match('=')) self.make_token(TokenType.LessEqual) else self.make_token(TokenType.Less),
-        '>' => return if (self.match('=')) self.make_token(TokenType.GreaterEqual) else self.make_token(TokenType.Greater),
-
+        '>' => return if (self.match('=')) self.make_token(TokenType.FatComma) else self.make_token(TokenType.Greater),
         '"' => return self.double_string(),
         '\'' => return self.single_string(),
         else => {},
@@ -367,6 +432,7 @@ pub fn identifier_type(self: *Scanner) TokenType {
             if (@intFromPtr(self.current) - @intFromPtr(self.start) > 1) {
                 switch (self.start[1]) {
                     'a' => return self.check_keyword(2, "lse", TokenType.False),
+                    'i' => return self.check_keyword(2, "eld", TokenType.Field),
                     'o' => return self.check_keyword(2, "r", TokenType.For),
                     'u' => return self.check_keyword(2, "n", TokenType.Fun),
                     else => return TokenType.Identifier,
@@ -376,7 +442,7 @@ pub fn identifier_type(self: *Scanner) TokenType {
             }
         },
         'i' => return self.check_keyword(1, "f", TokenType.If),
-        'n' => return self.check_keyword(1, "il", TokenType.Nil),
+        'm' => return self.check_keyword(1, "ethod", TokenType.Method),
         'o' => return self.check_keyword(1, "r", TokenType.Or),
         'p' => return self.check_keyword(1, "rint", TokenType.Print),
         'r' => return self.check_keyword(1, "eturn", TokenType.Return),
@@ -392,6 +458,7 @@ pub fn identifier_type(self: *Scanner) TokenType {
                 return TokenType.Identifier;
             }
         },
+        'u' => return self.check_keyword(1, "ndef", TokenType.Undef),
         'v' => return self.check_keyword(1, "ar", TokenType.Var),
         'w' => return self.check_keyword(1, "hile", TokenType.While),
         else => return TokenType.Identifier,
