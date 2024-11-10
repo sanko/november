@@ -23,6 +23,18 @@ test "is_alpha" {
     try testing.expect(is_alpha(' ') == false);
 }
 
+pub fn is_alphanumeric(c: u8) bool {
+    return is_alpha(c) or is_digit(c);
+}
+
+test "is_alphanumeric" {
+    try testing.expect(is_alphanumeric('A') == true);
+    try testing.expect(is_alphanumeric('1') == true);
+    try testing.expect(is_alphanumeric('A') == true);
+    try testing.expect(is_alphanumeric('_') == true);
+    try testing.expect(is_alphanumeric(' ') == false);
+}
+
 pub fn is_blank(c: u8) bool {
     return c == ' ' or c == '\t';
 }
