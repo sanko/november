@@ -7,67 +7,76 @@ const testing = std.testing;
 const mem = std.mem;
 const ArrayList = std.ArrayList;
 
+const Allocator = mem.Allocator;
+
+const heap = std.heap;
+const process = std.process;
+const fatal = process.fatal;
+const io = std.io;
 const builtin = @import("builtin");
 const native_os = builtin.os.tag;
+
+const use_gpa = (!builtin.link_libc) and native_os != .wasi;
 
 pub const OpCode = enum {
     OP_RETURN,
 };
 
-pub const Chunk = struct {
-    count: i64 = 0,
-    capacity: i64 = 0,
-    code: ArrayList(u8),
+const Chunky = struct {
+    // allocator: mem.Allocator,
+    code: ArrayList(u64),
     constants: ArrayList(SV),
 
-    //    writeChunk: fn (byte: u8) void,
-    pub fn init() Chunk {
-        Chunk{ .code = ArrayList(u8).init(handy.allocator), .constants = ArrayList(u8).init(handy.allocator) };
+    pub fn init(allocator: Allocator) !Chunky {
+        return .{
+            // .allocator = allocator,
+            .code = std.ArrayList(u64).init(allocator),
+            .constants = std.ArrayList(SV).init(allocator),
+        };
     }
 
-    test "return" {
-        try testing.expect(2 == 2);
-
-        const chunk = Chunk.init();
-
-        try testing.expect(chunk.count == 0);
-
-        // const memory = try handy.allocator.alloc(u8, 100);
-        // defer _ = chunk.allocator.free(memory);
+    pub fn deinit(self: Chunky) void {
+        self.code.deinit();
+        self.constants.deinit();
     }
 
-    fn GROW_CAPACITY(capacity: u8) u8 {
-        if (capacity < 8) {
-            return 8;
-        }
-        return capacity * 2; // TODO: Make this smart. Up to a certain point, we double every time.
-    }
-
-    fn writeChunk(chunk: Chunk, byte: u8) void {
-        if (chunk.capacity < chunk.count + 1) {
-            debug.print("capacity: {}", .{chunk.capacity});
-            const oldCapacity = chunk.capacity;
-            chunk.capacity = GROW_CAPACITY(oldCapacity);
-            chunk.allocator.realloc(oldCapacity, chunk.capacity);
-        }
-        chunk.code[chunk.count] = byte;
-        chunk.count += 1;
-    }
-
-    test "writeChunk" {
-        const chunk = Chunk.init();
-        try testing.expect(chunk.count == 0);
-        chunk.writeChunk(0);
-        try testing.expect(chunk.count == 1);
-        try testing.expect(chunk.capacity == 8);
-        for (1..10) |i| {
-            chunk.writeChunk(0);
-            std.debug.print("{d}\n", .{i});
-        }
-        try testing.expect(chunk.count == 1);
-        try testing.expect(chunk.capacity == 16);
-
-        // const memory = try handy.allocator.alloc(u8, 100);
-        // defer _ = chunk.allocator.free(memory);
+    pub fn add(self: *Chunky, code: u64) error{OutOfMemory}!void {
+        try self.code.append(code);
     }
 };
+
+test "writeChunk" {
+    const allocator = gp: {
+        if (native_os == .wasi) {
+            break :gp heap.wasm_allocator;
+        }
+        if (use_gpa) {
+            var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
+            //general_purpose_allocator.deinit();
+            break :gp general_purpose_allocator.allocator();
+        }
+        // We would prefer to use raw libc allocator here, but cannot
+        // use it if it won't support the alignment we need.
+        if (@alignOf(std.c.max_align_t) < @max(@alignOf(i128), std.atomic.cache_line)) {
+            break :gp std.heap.c_allocator;
+        }
+        break :gp std.heap.raw_c_allocator;
+    };
+
+    var chunky = try Chunky.init(allocator);
+    defer chunky.deinit();
+    for (1..1025) |x| {
+        try chunky.add(10);
+        std.debug.print("loop: {}, capacity: {}, items: {}\n", .{ x, chunky.code.capacity, chunky.code.items.len });
+    }
+}
+
+pub const Chunk = struct {
+    const Self = @This();
+};
+
+// test "return" {
+//     try testing.expect(2 == 2);
+//     const chunk = Chunk.init();
+//     try testing.expect(chunk.count == 0);
+// }
