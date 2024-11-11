@@ -1,6 +1,8 @@
 const std = @import("std");
 const math = std.math;
 const mem = std.mem;
+const Allocator = mem.Allocator;
+
 const ascii = std.ascii;
 const unicode = std.unicode;
 const debug = std.debug;
@@ -8,17 +10,38 @@ const testing = std.testing;
 const filesystem = std.fs;
 const heap = std.heap;
 
+const builtin = @import("builtin");
+const native_os = builtin.os.tag;
+
 const token = @import("Token.zig");
 const Token = token.Token;
 const TokenType = token.TokenType;
 
 const Scanner = @import("Scanner.zig");
-
-const builtin = @import("builtin");
-
 const Chunk = @import("Chunk.zig");
 
 const version = std.SemanticVersion.parse("0.0.1-dev0");
+const use_gpa = (!builtin.link_libc) and native_os != .wasi;
+
+pub fn generate_allocator() Allocator {
+    const allocator = gp: {
+        if (native_os == .wasi) {
+            break :gp heap.wasm_allocator;
+        }
+        if (use_gpa) {
+            var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
+            //general_purpose_allocator.deinit();
+            break :gp general_purpose_allocator.allocator();
+        }
+        // We would prefer to use raw libc allocator here, but cannot
+        // use it if it won't support the alignment we need.
+        if (@alignOf(std.c.max_align_t) < @max(@alignOf(i128), std.atomic.cache_line)) {
+            break :gp std.heap.c_allocator;
+        }
+        break :gp std.heap.raw_c_allocator;
+    };
+    return allocator;
+}
 
 test "hello_world" {
     const alloc = init: { // https://zig.guide/standard-library/allocators

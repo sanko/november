@@ -1,10 +1,26 @@
 const std = @import("std");
+const handy = @import("handy.zig");
+
+const debug = std.debug;
+const testing = std.testing;
+const mem = std.mem;
+const ArrayList = std.ArrayList;
+
+const Allocator = mem.Allocator;
+
+const heap = std.heap;
+const process = std.process;
+const fatal = process.fatal;
+const io = std.io;
+const builtin = @import("builtin");
+const native_os = builtin.os.tag;
+
+const use_gpa = (!builtin.link_libc) and native_os != .wasi;
+
 // const Obj = @import("./object.zig").Obj;
 // const NAN_BOXING = @import("./debug.zig").NAN_BOXING;
 
 // pub const Value = if (NAN_BOXING) NanBoxedValue else UnionValue;
-
-pub const SV = UnionValue;
 
 // pub const NanBoxedValue = packed struct {
 //     data: u64,
@@ -95,15 +111,66 @@ pub const SV = UnionValue;
 //     }
 // };
 
-pub const UnionValue = union(enum) {
+const AV = struct {
+    values: ArrayList(SV),
+
+    pub fn init(allocator: Allocator) !AV {
+        return .{
+            .values = std.ArrayList(SV).init(allocator),
+        };
+    }
+
+    pub fn deinit(self: AV) void {
+        self.values.deinit();
+    }
+
+    pub fn push(self: *AV, value: SV) error{OutOfMemory}!void {
+        try self.values.append(value);
+    }
+    pub fn pop(self: *AV) !SV {
+        return try self.values.pop();
+    }
+    pub fn shift(self: *AV) SV {
+        return self.values.orderedRemove(0);
+    }
+    pub fn unshift(self: *AV, value: SV) !SV {
+        const dst = self.values.addManyAt(1, 1);
+        dst[0] = value;
+        return value;
+    }
+};
+
+test "AV" {
+    const allocator = testing.allocator;
+    var array = try AV.init(allocator);
+    defer array.deinit();
+    try testing.expect(array.values.capacity >= 0);
+    try testing.expect(array.values.items.len == 0);
+
+    const one = SV{ .IV = 1 };
+    try array.push(one);
+    for (1..1025) |x| {
+        try array.push(SV{ .UV = @intCast(x) });
+    }
+    try testing.expect(array.values.capacity >= 1025);
+    try testing.expect(array.values.items.len == 1025);
+
+    const shifted = array.shift();
+    try testing.expect(shifted.IOK());
+}
+
+// TODO: dualvar support will require some thinking as Zig doens't allow multiple fields to be defined
+pub const SV = union(enum) {
     Bool: bool,
     //     Nil,
     IV: i64,
+    UV: u64,
     PV: []u8,
     NV: f64,
+    AV: AV,
     // Obj: *Obj,
 
-    pub fn isBool(self: UnionValue) bool {
+    pub fn isBool(self: *SV) bool {
         return self == .Bool;
     }
 
@@ -111,55 +178,61 @@ pub const UnionValue = union(enum) {
     //     return self == .Nil;
     // }
 
-    pub fn isNumber(self: UnionValue) bool {
-        return self == .Number;
+    pub fn UOK(self: SV) bool {
+        return self == .UV;
     }
 
-    //     pub fn isObj(self: UnionValue) bool {
+    pub fn NOK(self: SV) bool {
+        return self == .NV;
+    }
+    pub fn IOK(self: SV) bool {
+        return self == .IV;
+    }
+    //     pub fn isObj(self: SV) bool {
     //         return self == .Obj;
     //     }
 
-    pub fn asBool(self: UnionValue) bool {
+    pub fn asBool(self: SV) bool {
         std.debug.assert(self.isBool());
         return self.Bool;
     }
 
-    pub fn asNumber(self: UnionValue) f64 {
+    pub fn asNumber(self: SV) f64 {
         std.debug.assert(self.isNumber());
-        return self.Number;
+        return self.NV;
     }
 
-    //     pub fn asObj(self: UnionValue) *Obj {
+    //     pub fn asObj(self: SV) *Obj {
     //         std.debug.assert(self.isObj());
     //         return self.Obj;
     //     }
 
-    pub fn fromBool(x: bool) UnionValue {
-        return UnionValue{ .Bool = x };
+    pub fn fromBool(x: bool) SV {
+        return SV{ .Bool = x };
     }
 
     //     pub fn nil() UnionValue {
     //         return .Nil;
     //     }
 
-    pub fn fromNumber(x: f64) UnionValue {
-        return UnionValue{ .Number = x };
+    pub fn fromNumber(x: f64) SV {
+        return SV{ .NV = x };
     }
 
-    //     pub fn fromObj(x: *Obj) UnionValue {
-    //         return UnionValue{ .Obj = x };
+    //     pub fn fromObj(x: *Obj) SV {
+    //         return SV{ .Obj = x };
     //     }
 
-    pub fn isFalsey(self: UnionValue) bool {
+    pub fn isFalsey(self: SV) bool {
         return switch (self) {
             .Bool => |x| !x,
             // .Nil => true,
-            .Number => false,
+            .NV => false,
             // .Obj => false,
         };
     }
 
-    pub fn equals(aBoxed: UnionValue, bBoxed: UnionValue) bool {
+    pub fn equals(aBoxed: SV, bBoxed: SV) bool {
         return switch (aBoxed) {
             .Bool => |a| {
                 return switch (bBoxed) {
@@ -173,9 +246,9 @@ pub const UnionValue = union(enum) {
             //         else => false,
             //     };
             // },
-            .Number => |a| {
+            .NV => |a| {
                 return switch (bBoxed) {
-                    .Number => |b| a == b,
+                    .NV => |b| a == b,
                     else => false,
                 };
             },
@@ -188,12 +261,12 @@ pub const UnionValue = union(enum) {
         };
     }
 
-    pub fn format(self: UnionValue, comptime fmt: []const u8, options: std.fmt.FormatOptions, out_stream: anytype) !void {
+    pub fn format(self: SV, comptime fmt: []const u8, options: std.fmt.FormatOptions, out_stream: anytype) !void {
         _ = fmt;
         _ = options;
         switch (self) {
             .Bool => |value| try out_stream.print("{}", .{value}),
-            .Number => |value| try out_stream.print("{d}", .{value}),
+            .NV => |value| try out_stream.print("{d}", .{value}),
             // .Nil => try out_stream.print("nil", .{}),
             // .Obj => |obj| try printObject(obj, out_stream),
         }

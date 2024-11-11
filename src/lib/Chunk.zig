@@ -18,19 +18,20 @@ const native_os = builtin.os.tag;
 
 const use_gpa = (!builtin.link_libc) and native_os != .wasi;
 
-pub const OpCode = enum {
+pub const OpCode = enum(u64) {
     OP_RETURN,
+    pub fn isReturn(self: OpCode) bool {
+        return self == OpCode.OP_RETURN;
+    }
 };
 
 const Chunky = struct {
-    // allocator: mem.Allocator,
-    code: ArrayList(u64),
+    code: ArrayList(OpCode),
     constants: ArrayList(SV),
 
     pub fn init(allocator: Allocator) !Chunky {
         return .{
-            // .allocator = allocator,
-            .code = std.ArrayList(u64).init(allocator),
+            .code = std.ArrayList(OpCode).init(allocator),
             .constants = std.ArrayList(SV).init(allocator),
         };
     }
@@ -40,43 +41,55 @@ const Chunky = struct {
         self.constants.deinit();
     }
 
-    pub fn add(self: *Chunky, code: u64) error{OutOfMemory}!void {
+    pub fn add(self: *Chunky, code: OpCode) error{OutOfMemory}!void {
         try self.code.append(code);
+    }
+
+    pub fn simpleInstruction(self: *Chunky, name: []const u8, offset: usize) usize {
+        debug.print("{s}\n", .{name});
+        _ = self;
+        return offset + 1;
+    }
+
+    pub fn disassembleChunk(self: *Chunky, name: []const u8) !void {
+        debug.print("== {s} ==\n", .{name});
+        var offset: usize = 0;
+        const y = self.code.items.len;
+        while (offset < y) {
+            offset = self.disassembleInstruction(offset);
+        }
+    }
+    pub fn disassembleInstruction(self: *Chunky, offset: usize) usize {
+        debug.print("{d:05} ", .{offset});
+        const instruction = self.code.items[offset];
+        switch (instruction) {
+            .OP_RETURN => {
+                return self.simpleInstruction("OP_RETURN", offset);
+            },
+            // else => {},
+        }
     }
 };
 
 test "writeChunk" {
-    const allocator = gp: {
-        if (native_os == .wasi) {
-            break :gp heap.wasm_allocator;
-        }
-        if (use_gpa) {
-            var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
-            //general_purpose_allocator.deinit();
-            break :gp general_purpose_allocator.allocator();
-        }
-        // We would prefer to use raw libc allocator here, but cannot
-        // use it if it won't support the alignment we need.
-        if (@alignOf(std.c.max_align_t) < @max(@alignOf(i128), std.atomic.cache_line)) {
-            break :gp std.heap.c_allocator;
-        }
-        break :gp std.heap.raw_c_allocator;
-    };
-
+    const allocator = testing.allocator;
     var chunky = try Chunky.init(allocator);
     defer chunky.deinit();
+    try testing.expect(chunky.code.capacity >= 0);
+    try testing.expect(chunky.code.items.len == 0);
     for (1..1025) |x| {
-        try chunky.add(10);
-        std.debug.print("loop: {}, capacity: {}, items: {}\n", .{ x, chunky.code.capacity, chunky.code.items.len });
+        _ = x;
+        try chunky.add(OpCode.OP_RETURN);
     }
+    try testing.expect(chunky.code.capacity >= 1025);
+    try testing.expect(chunky.code.items.len == 1024);
 }
 
-pub const Chunk = struct {
-    const Self = @This();
-};
-
-// test "return" {
-//     try testing.expect(2 == 2);
-//     const chunk = Chunk.init();
-//     try testing.expect(chunk.count == 0);
-// }
+test "disassembleChunk" {
+    const allocator = testing.allocator;
+    var chunky = try Chunky.init(allocator);
+    defer chunky.deinit();
+    try chunky.add(OpCode.OP_RETURN);
+    try testing.expect(chunky.code.items.len == 1);
+    try chunky.disassembleChunk("Test");
+}
