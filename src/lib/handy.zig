@@ -2,6 +2,33 @@ const std = @import("std");
 const ascii = std.ascii;
 const testing = std.testing;
 
+const heap = std.heap;
+const process = std.process;
+const fatal = process.fatal;
+const mem = std.mem;
+const debug = std.debug;
+const io = std.io;
+const builtin = @import("builtin");
+const native_os = builtin.os.tag;
+
+const use_gpa = (!builtin.link_libc) and native_os != .wasi;
+pub const allocator = allocator: {
+    if (native_os == .wasi) {
+        break :allocator heap.wasm_allocator;
+    }
+    if (use_gpa) {
+        var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
+        _ = general_purpose_allocator.deinit();
+        break :allocator general_purpose_allocator.allocator();
+    }
+    // We would prefer to use raw libc allocator here, but cannot
+    // use it if it won't support the alignment we need.
+    if (@alignOf(std.c.max_align_t) < @max(@alignOf(i128), std.atomic.cache_line)) {
+        break :allocator std.heap.c_allocator;
+    }
+    break :allocator std.heap.raw_c_allocator;
+};
+
 pub fn is_digit(c: u8) bool {
     return '0' <= c and c <= '9';
 }

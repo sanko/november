@@ -16,6 +16,8 @@ const Scanner = @import("Scanner.zig");
 
 const builtin = @import("builtin");
 
+const Chunk = @import("Chunk.zig");
+
 const version = std.SemanticVersion.parse("0.0.1-dev0");
 
 test "hello_world" {
