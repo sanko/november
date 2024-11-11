@@ -20,6 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v1.2.1
+        with:
+          version: 0.14.0-dev.2211+05a3ac43e
       - run: zig build test --summary all
   linux:
     name: "Linux"
@@ -34,6 +36,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v1.2.1
+        with:
+          version: 0.14.0-dev.2211+05a3ac43e
       - run: zig build test --summary all
   win32:
     name: "Windows"
@@ -48,6 +52,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v1.2.1
+        with:
+          version: 0.14.0-dev.2211+05a3ac43e
       - run: zig build test --summary all
   results:
     name: Results

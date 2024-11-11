@@ -1,5 +1,6 @@
 const std = @import("std");
 const handy = @import("handy.zig");
+const tap = @import("test.zig");
 
 const debug = std.debug;
 const testing = std.testing;
@@ -157,6 +158,11 @@ test "AV" {
 
     const shifted = array.shift();
     try testing.expect(shifted.IOK());
+    try testing.expect(shifted.IV == 1);
+
+    const popped = array.pop();
+    try testing.expect(popped.IOK());
+    try testing.expect(popped.IV == 1);
 }
 
 // TODO: dualvar support will require some thinking as Zig doens't allow multiple fields to be defined
