@@ -112,6 +112,14 @@ const use_gpa = (!builtin.link_libc) and native_os != .wasi;
 //     }
 // };
 
+const PV = struct {
+    pv: []const u8,
+    dual: ?*SV, // TODO: Allow values to have dualvars!
+    pub fn init(string: []const u8) !PV {
+        return .{ .pv = string, .dual = null };
+    }
+};
+
 const AV = struct {
     values: ArrayList(SV),
 
@@ -125,18 +133,22 @@ const AV = struct {
         self.values.deinit();
     }
 
-    pub fn push(self: *AV, value: SV) error{OutOfMemory}!void {
-        try self.values.append(value);
+    pub fn push(self: *AV, value: SV) error{OutOfMemory}!SV {
+        self.values.append(value) catch |err| {
+            if (err == error.OutOfMemory) {
+                return err;
+            }
+        };
+        return value;
     }
-    pub fn pop(self: *AV) !SV {
-        return try self.values.pop();
+    pub fn pop(self: *AV) SV {
+        return self.values.pop();
     }
     pub fn shift(self: *AV) SV {
         return self.values.orderedRemove(0);
     }
-    pub fn unshift(self: *AV, value: SV) !SV {
-        const dst = self.values.addManyAt(1, 1);
-        dst[0] = value;
+    pub fn unshift(self: *AV, value: SV) Allocator.Error!SV {
+        try self.values.insert(0, value);
         return value;
     }
 };
@@ -149,9 +161,9 @@ test "AV" {
     try testing.expect(array.values.items.len == 0);
 
     const one = SV{ .IV = 1 };
-    try array.push(one);
+    _ = try array.push(one);
     for (1..1025) |x| {
-        try array.push(SV{ .UV = @intCast(x) });
+        _ = try array.push(SV{ .UV = @intCast(x) });
     }
     try testing.expect(array.values.capacity >= 1025);
     try testing.expect(array.values.items.len == 1025);
@@ -160,18 +172,36 @@ test "AV" {
     try testing.expect(shifted.IOK());
     try testing.expect(shifted.IV == 1);
 
+    const string_sv = SV{ .PV = try PV.init("I hope this works") };
+    const unshifted = try array.unshift(string_sv);
+    try testing.expect(unshifted.PvOK());
+    try testing.expectEqualStrings("I hope this works", unshifted.PV.pv);
+
+    const shifted_2 = array.shift();
+    try testing.expect(shifted_2.PvOK());
+    try testing.expectEqualStrings("I hope this works", shifted_2.PV.pv);
+
     const popped = array.pop();
-    try testing.expect(popped.IOK());
-    try testing.expect(popped.IV == 1);
+    try testing.expect(popped.UOK());
+    try testing.expectEqual(1024, popped.UV);
+
+    const pushed = try array.push(SV{ .NV = 3.14 });
+    try testing.expect(pushed.NOK());
+    try testing.expectEqual(3.14, pushed.NV);
+
+    const popped_2 = array.pop();
+    try testing.expect(popped_2.NOK());
+    try testing.expectEqual(3.14, popped_2.NV);
 }
 
-// TODO: dualvar support will require some thinking as Zig doens't allow multiple fields to be defined
+// TODO: dualvar support will require some thinking
+//       see PV.dual
 pub const SV = union(enum) {
     Bool: bool,
     //     Nil,
     IV: i64,
     UV: u64,
-    PV: []u8,
+    PV: PV,
     NV: f64,
     AV: AV,
     // Obj: *Obj,
@@ -193,6 +223,9 @@ pub const SV = union(enum) {
     }
     pub fn IOK(self: SV) bool {
         return self == .IV;
+    }
+    pub fn PvOK(self: SV) bool {
+        return self == .PV;
     }
     //     pub fn isObj(self: SV) bool {
     //         return self == .Obj;
