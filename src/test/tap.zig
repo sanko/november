@@ -108,7 +108,7 @@ pub fn main() !void {
         }
     }
 
-    for (builtin.test_functions) |t| {
+    for (builtin.test_functions, 1..) |t, i| {
         if (isTeardown(t)) {
             current_test = friendlyName(t.name);
             t.func() catch |err| {
@@ -116,6 +116,7 @@ pub fn main() !void {
                 return err;
             };
         }
+        tap.status(.pass, "    ok {d} - {s}\n", .{ i, t.name });
     }
 
     const total_tests = pass + fail;
