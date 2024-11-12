@@ -22,7 +22,7 @@ jobs:
       - uses: mlugg/setup-zig@v1.2.1
         with:
           version: 0.14.0-dev.2211+05a3ac43e
-      - run: zig build test --summary all
+      - run: zig build test --summary all -freference-trace=10
   linux:
     name: "Linux"
     needs:
@@ -38,7 +38,7 @@ jobs:
       - uses: mlugg/setup-zig@v1.2.1
         with:
           version: 0.14.0-dev.2211+05a3ac43e
-      - run: zig build test --summary all
+      - run: zig build test --summary all -freference-trace=10
   win32:
     name: "Windows"
     needs:
@@ -54,7 +54,7 @@ jobs:
       - uses: mlugg/setup-zig@v1.2.1
         with:
           version: 0.14.0-dev.2211+05a3ac43e
-      - run: zig build test --summary all
+      - run: zig build test --summary all -freference-trace=10
   results:
     name: Results
     needs:

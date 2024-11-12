@@ -34,8 +34,8 @@ pub fn argv() !void {
     const arena = arena_instance.allocator();
 
     const args = try process.argsAlloc(arena);
-    const env_map = try process.getEnvMap(arena);
-
+    var env_map = try process.getEnvMap(arena);
+    defer env_map.deinit();
     return mainArgs(gpa, arena, args, env_map);
 }
 test "help" {
@@ -45,7 +45,8 @@ test "help" {
     const arena = arena_instance.allocator();
     const args = &.{ "fake.exe", "help" };
     try std.testing.expectEqual(1, 1);
-    const env_map = try process.getEnvMap(arena);
+    var env_map = try process.getEnvMap(arena);
+    defer env_map.deinit();
     try mainArgs(gpa, arena, args, env_map);
     try std.testing.expectEqual(1, 1);
 }
@@ -56,7 +57,8 @@ test "help help" {
     const arena = arena_instance.allocator();
     const args = &.{ "fake.exe", "help", "help" };
     try std.testing.expectEqual(1, 1);
-    const env_map = try process.getEnvMap(arena);
+    var env_map = try process.getEnvMap(arena);
+    defer env_map.deinit();
     try mainArgs(gpa, arena, args, env_map);
     try std.testing.expectEqual(1, 1);
 }
@@ -67,7 +69,8 @@ test "help run" {
     const arena = arena_instance.allocator();
     const args = &.{ "fake.exe", "help", "run" };
     try std.testing.expectEqual(1, 1);
-    const env_map = try process.getEnvMap(arena);
+    var env_map = try process.getEnvMap(arena);
+    defer env_map.deinit();
     try mainArgs(gpa, arena, args, env_map);
     try std.testing.expectEqual(1, 1);
 }
@@ -75,43 +78,14 @@ test "help run" {
 fn mainArgs(gpa: mem.Allocator, arena: mem.Allocator, args: []const []const u8, env: process.EnvMap) !void {
     // const tr = tracy.trace(@src());
     // defer tr.end();
+    _ = arena;
     _ = gpa;
+    _ = env;
 
     if (args.len <= 1 and !builtin.is_test) {
         // usage(args[0], null);
         // fatal("TODO: kick off REPL", .{});
         repl();
-    }
-
-    if (process.can_execv and std.posix.getenvZ("ZIG_IS_DETECTING_LIBC_PATHS") != null) {
-        // dev.check(.cc_command);
-        // In this case we have accidentally invoked ourselves as "the system C compiler"
-        // to figure out where libc is installed. This is essentially infinite recursion
-        // via child process execution due to the CC environment variable pointing to Zig.
-        // Here we ignore the CC environment variable and exec `cc` as a child process.
-        // However it's possible Zig is installed as *that* C compiler as well, which is
-        // why we have this additional environment variable here to check.
-
-        const inf_loop_env_key = "ZIG_IS_TRYING_TO_NOT_CALL_ITSELF";
-        if (env.get(inf_loop_env_key) != null) {
-            fatalWithHint("The compilation links against libc, but Zig is unable to provide a libc " ++
-                "for this operating system, and no --libc " ++
-                "parameter was provided, so Zig attempted to invoke the system C compiler " ++
-                "in order to determine where libc is installed. However the system C " ++
-                "compiler is `zig cc`, so no libc installation was found.", .{});
-        }
-        try env.put(inf_loop_env_key, "1");
-
-        // Some programs such as CMake will strip the `cc` and subsequent args from the
-        // CC environment variable. We detect and support this scenario here because of
-        // the ZIG_IS_DETECTING_LIBC_PATHS environment variable.
-        if (mem.eql(u8, args[1], "cc")) {
-            //return process.execve(arena, args[1..], &env);
-        } else {
-            const modified_args = try arena.dupe([]const u8, args);
-            modified_args[0] = "cc";
-            //return process.execve(arena, modified_args, &env);
-        }
     }
 
     const cmd = args[1];
