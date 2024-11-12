@@ -70,7 +70,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/lib/rocken.zig"),
         .target = target,
         .optimize = optimize,
-        .test_runner = b.path("src/lib/test.zig"),
+        .test_runner = b.path("src/test/tap.zig"),
     });
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
@@ -79,7 +79,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/cli/brocken.zig"),
         .target = target,
         .optimize = optimize,
-        .test_runner = b.path("src/lib/test.zig"),
+        .test_runner = b.path("src/test/tap.zig"),
     });
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);

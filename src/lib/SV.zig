@@ -1,6 +1,6 @@
 const std = @import("std");
 const handy = @import("handy.zig");
-const tap = @import("test.zig");
+const tap = @import("../test/test.zig");
 
 const debug = std.debug;
 const testing = std.testing;

@@ -1,5 +1,6 @@
 // https://gist.github.com/karlseguin/c6bea5b35e4e8d26af6f81c22cb5d76b
-
+// https://github.com/ziglang/zig/blob/862266514ae184eb743959bd0a67db0628b5247a/lib/compiler/test_runner.zig#L92
+// https://testanything.org/tap-version-13-specification.html
 const std = @import("std");
 const process = std.process;
 const builtin = @import("builtin");
@@ -7,12 +8,12 @@ const debug = std.debug;
 
 const Allocator = std.mem.Allocator;
 
-const BORDER = "=" ** 80;
-
 // use in custom panic handler
 var current_test: ?[]const u8 = null;
 
 pub fn main() !void {
+    @disableInstrumentation();
+    const test_fn_list = builtin.test_functions;
     var mem: [8192]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&mem);
 
@@ -28,22 +29,23 @@ pub fn main() !void {
     var fail: usize = 0;
     var skip: usize = 0;
     var leak: usize = 0;
+    // var current: usize = 0;
 
-    const printer = Printer.init();
-    printer.fmt("\r\x1b[0K", .{}); // beginning of line and clear to end of line
+    const tap = TAP.init();
+    // tap.fmt("\r\x1b[0K", .{}); // beginning of line and clear to end of line
+    tap.fmt("1..{d}\n", .{test_fn_list.len});
 
-    for (builtin.test_functions) |t| {
+    for (test_fn_list, 1..) |t, current| {
+        const friendly_name = friendlyName(t.name);
+        tap.fmt("# SUBTEST: {s}\n", .{friendly_name});
+
         if (isSetup(t)) {
-            current_test = friendlyName(t.name);
             t.func() catch |err| {
-                printer.status(.fail, "\nsetup \"{s}\" failed: {}\n", .{ t.name, err });
+                tap.status(.fail, "Bail out! Setup for \"{s}\" failed: {}\n", .{ t.name, err });
                 return err;
             };
         }
-    }
-
-    for (builtin.test_functions) |t| {
-        if (isSetup(t) or isTeardown(t)) {
+        if (isTeardown(t)) {
             continue;
         }
 
@@ -57,8 +59,6 @@ pub fn main() !void {
             }
         }
 
-        const friendly_name = friendlyName(t.name);
-        current_test = friendly_name;
         std.testing.allocator_instance = .{};
         const result = t.func();
         current_test = null;
@@ -71,20 +71,26 @@ pub fn main() !void {
 
         if (std.testing.allocator_instance.deinit() == .leak) {
             leak += 1;
-            printer.status(.fail, "\n{s}\n\"{s}\" - Memory Leak\n{s}\n", .{ BORDER, friendly_name, BORDER });
+            // tap.status(.fail, "Memory Leak\n{s}\n", .{ friendly_name });
         }
 
         if (result) |_| {
             pass += 1;
+            tap.status(.pass, "ok {d} - {s}\n", .{ current, friendly_name });
         } else |err| switch (err) {
-            error.SkipZigTest => {
+            TAP.SKIP => {
                 skip += 1;
                 status = .skip;
+                tap.status(.skip, "ok {d} # skip {s}\n", .{ current, friendly_name });
             },
+            TAP.TODO => {},
             else => {
                 status = .fail;
                 fail += 1;
-                printer.status(.fail, "\n{s}\n\"{s}\" - {s}\n{s}\n", .{ BORDER, friendly_name, @errorName(err), BORDER });
+                tap.status(.fail, "{s}\n{s}\n", .{
+                    friendly_name,
+                    @errorName(err),
+                });
                 if (@errorReturnTrace()) |trace| {
                     std.debug.dumpStackTrace(trace.*);
                 }
@@ -96,9 +102,9 @@ pub fn main() !void {
 
         if (env.verbose) {
             const ms = @as(f64, @floatFromInt(ns_taken)) / 1_000_000.0;
-            printer.status(status, "{s} ({d:.2}ms)\n", .{ friendly_name, ms });
+            tap.status(status, "# {d:.2}ms\n", .{ms});
         } else {
-            printer.status(status, ".", .{});
+            tap.status(status, ".", .{});
         }
     }
 
@@ -106,24 +112,27 @@ pub fn main() !void {
         if (isTeardown(t)) {
             current_test = friendlyName(t.name);
             t.func() catch |err| {
-                printer.status(.fail, "\nteardown \"{s}\" failed: {}\n", .{ t.name, err });
+                tap.status(.fail, "\nteardown \"{s}\" failed: {}\n", .{ t.name, err });
                 return err;
             };
         }
     }
 
     const total_tests = pass + fail;
-    const status = if (fail == 0) Status.pass else Status.fail;
-    printer.status(status, "\n{d} of {d} test{s} passed\n", .{ pass, total_tests, if (total_tests != 1) "s" else "" });
+    const status = if (fail == 0)
+        Status.pass
+    else
+        Status.fail;
+    tap.status(status, "\n{d} of {d} test{s} passed\n", .{ pass, total_tests, if (total_tests != 1) "s" else "" });
     if (skip > 0) {
-        printer.status(.skip, "{d} test{s} skipped\n", .{ skip, if (skip != 1) "s" else "" });
+        tap.status(.skip, "{d} test{s} skipped\n", .{ skip, if (skip != 1) "s" else "" });
     }
     if (leak > 0) {
-        printer.status(.fail, "{d} test{s} leaked\n", .{ leak, if (leak != 1) "s" else "" });
+        tap.status(.fail, "{d} test{s} leaked\n", .{ leak, if (leak != 1) "s" else "" });
     }
-    printer.fmt("\n", .{});
-    try slowest.display(printer);
-    printer.fmt("\n", .{});
+    tap.fmt("\n", .{});
+    try slowest.display(tap);
+    tap.fmt("\n", .{});
     if (fail == 0) {
         return cleanExit();
     }
@@ -141,20 +150,35 @@ fn friendlyName(name: []const u8) []const u8 {
     return name;
 }
 
-const Printer = struct {
-    out: std.fs.File.Writer,
+const have_tty = std.io.getStdErr().isTty();
 
-    fn init() Printer {
+pub const TAP = struct {
+    pub const TODO = error.TODO;
+    pub const SKIP = error.SKIP;
+
+    out: std.fs.File.Writer,
+    pass: usize = 0,
+    fail: usize = 0,
+    skip: usize = 0,
+    depth: usize = 0,
+
+    fn init() TAP {
         return .{
             .out = std.io.getStdErr().writer(),
         };
     }
-
-    fn fmt(self: Printer, comptime format: []const u8, args: anytype) void {
-        std.fmt.format(self.out, format, args) catch unreachable;
+    fn deinit(self: TAP) !void {
+        //  self.out
+        _ = self;
     }
 
-    fn status(self: Printer, s: Status, comptime format: []const u8, args: anytype) void {
+    fn fmt(self: TAP, comptime format: []const u8, args: anytype) void {
+        // if (!have_tty) {
+        std.fmt.format(self.out, format, args) catch unreachable;
+        // }
+    }
+
+    fn status(self: TAP, s: Status, comptime format: []const u8, args: anytype) void {
         const color = switch (s) {
             .pass => "\x1b[32m",
             .fail => "\x1b[31m",
@@ -234,13 +258,13 @@ const SlowTracker = struct {
         return ns;
     }
 
-    fn display(self: *SlowTracker, printer: Printer) !void {
+    fn display(self: *SlowTracker, tap: TAP) !void {
         var slowest = self.slowest;
         const count = slowest.count();
-        printer.fmt("Slowest {d} test{s}: \n", .{ count, if (count != 1) "s" else "" });
+        tap.fmt("Slowest {d} test{s}: \n", .{ count, if (count != 1) "s" else "" });
         while (slowest.removeMinOrNull()) |info| {
             const ms = @as(f64, @floatFromInt(info.ns)) / 1_000_000.0;
-            printer.fmt("  {d:.2}ms\t{s}\n", .{ ms, info.name });
+            tap.fmt("  {d:.2}ms\t{s}\n", .{ ms, info.name });
         }
     }
 
@@ -289,7 +313,7 @@ const Env = struct {
 
 pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
     if (current_test) |ct| {
-        std.debug.print("\x1b[31m{s}\npanic running \"{s}\"\n{s}\x1b[0m\n", .{ BORDER, ct, BORDER });
+        std.debug.print("\x1b[31m\npanic running \"{s}\"\x1b[0m\n", .{ct});
     }
     std.debug.defaultPanic(msg, error_return_trace, ret_addr);
 }

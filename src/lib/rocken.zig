@@ -13,12 +13,14 @@ const heap = std.heap;
 const builtin = @import("builtin");
 const native_os = builtin.os.tag;
 
+const Chunk = @import("Chunk.zig");
+const handy = @import("handy.zig");
+
+const Scanner = @import("Scanner.zig");
+const SV = @import("SV.zig");
 const token = @import("Token.zig");
 const Token = token.Token;
 const TokenType = token.TokenType;
-
-const Scanner = @import("Scanner.zig");
-const Chunk = @import("Chunk.zig");
 
 const version = std.SemanticVersion.parse("0.0.1-dev0");
 const use_gpa = (!builtin.link_libc) and native_os != .wasi;
@@ -66,4 +68,8 @@ test "hello_world" {
     try testing.expect(mem.eql(u8, "b", it1.nextCodepointSlice().?));
     try testing.expect(mem.eql(u8, " ", it1.nextCodepointSlice().?));
     // try testing.expect(mem.eql(u8, "こ", it1.nextCodepointSlice().?));
+}
+
+test {
+    testing.refAllDecls(@This());
 }
