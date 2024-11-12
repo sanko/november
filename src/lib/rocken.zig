@@ -13,8 +13,12 @@ const heap = std.heap;
 const builtin = @import("builtin");
 const native_os = builtin.os.tag;
 
+const Async = @import("Async.zig");
+
 const Chunk = @import("Chunk.zig");
 const handy = @import("handy.zig");
+
+const IO = @import("IO.zig");
 
 const Scanner = @import("Scanner.zig");
 const SV = @import("SV.zig");
@@ -72,4 +76,26 @@ test "hello_world" {
 
 test {
     testing.refAllDecls(@This());
+}
+
+test {
+    _ = Async;
+    _ = Chunk;
+    _ = handy;
+    _ = IO;
+    _ = Scanner;
+    _ = SV;
+    _ = Token;
+    // const Async = @import("Async.zig");
+
+    // const Chunk = @import("Chunk.zig");
+    // const handy = @import("handy.zig");
+
+    // const IO = @import("IO.zig");
+
+    // const Scanner = @import("Scanner.zig");
+    // const SV = @import("SV.zig");
+    // const token = @import("Token.zig");
+    // const Token = token.Token;
+    // const TokenType = token.TokenType;
 }
