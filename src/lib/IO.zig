@@ -18,8 +18,10 @@ const SV = sv.SV;
 const perlio = true;
 
 pub const IO_funcs = struct {
+    is_done: bool = false,
+
     fsize: usize = 0,
-    name: ?[]u8 = null,
+    name: ?[]const u8 = null,
     size: usize = 0,
     kind: u32 = 0,
 
@@ -35,7 +37,8 @@ pub const IO_funcs = struct {
     //  SSize_t(*Read) (pTHX_ PerlIO *f, void *vbuf, Size_t count);
     Read: ?fn (f: *IO, vbuf: []u8, count: usize) isize = null,
     Unread: ?fn (f: *IO, vbuf: []u8, count: usize) isize = null,
-    Write: ?fn (f: *IO, vbuf: []u8, count: usize) isize = null,
+    func: ?fn (value: SV) SV = null,
+    Write: ?fn (f: IO, vbuf: []u8, count: usize) isize = null,
     Seek: ?fn (f: *IO, offset: i32, whence: i32) IV = null,
     Tell: ?fn (f: *IO) i32 = null,
     Close: ?fn (f: *IO) IV = null,
@@ -54,6 +57,15 @@ pub const IO_funcs = struct {
     //  SSize_t(*Get_cnt) (pTHX_ PerlIO *f);
     // void (*Set_ptrcnt) (pTHX_ PerlIO *f, STDCHAR * ptr, SSize_t cnt);
 
+    // f: IO, vbuf: []u8, count: usize) isize
+    pub fn init(comptime fun: fn (value: SV) SV) IO_funcs {
+        return .{ .func = fun };
+    }
+
+    fn deinit(self: IO_funcs) !void {
+        //  self.out
+        _ = self;
+    }
 };
 
 pub const IO_pair = struct { funs: IO_funcs, arg: []SV };
@@ -68,6 +80,21 @@ pub const IO = struct {
     os_err: ?u32 = 0, // See https://github.com/Perl/perl5/blob/9a2ba7c5988c48321c87e36f614a11a3c585da61/perliol.h#L71
     head: ?*IO = null,
 
+    pub fn intmode2str(rawmode: i32, mode: []u8, writing: []i32) i32 {
+        _ = rawmode;
+        _ = mode;
+        _ = writing;
+        return 0;
+    }
+    // pub fn apply_layers()
+    // int
+    // PerlIO_apply_layers(pTHX_ PerlIO *f, const char *mode, const char *names)
+    // int
+    // PerlIO_binmode(pTHX_ PerlIO *fp, int iotype, int mode, const char *names)
+
+    // PerlIO *
+    // PerlIO_fdupopen(pTHX_ PerlIO *f, CLONE_PARAMS *param, int flags)
+
     pub fn Openn(layers: []u8, mode: []u8, fd: i32, imode: i32, perm: i32, old: *IO, narg: i32, args: []SV) *IO {
         _ = layers;
         _ = mode;
@@ -78,6 +105,7 @@ pub const IO = struct {
         _ = narg;
         _ = args;
     }
+
     pub fn Valid(self: *IO) bool { // Oy
         _ = self;
         return true;
@@ -95,6 +123,57 @@ pub const IO = struct {
             // }
         }
     }
+    // SSize_t
+    // Perl_PerlIO_write(pTHX_ PerlIO *f, const void *vbuf, Size_t count)
+    // {
+    //      PERL_ARGS_ASSERT_PERLIO_WRITE;
+
+    //      Perl_PerlIO_or_fail(f, Write, -1, (aTHX_ f, vbuf, count));
+    // }
+    // int
+    // PerlIO_vprintf(PerlIO *f, const char *fmt, va_list ap)
+    // {
+    //     dTHX;
+    //     SV * sv;
+    //     const char *s;
+    //     STRLEN len;
+    //     SSize_t wrote;
+    // #ifdef NEED_VA_COPY
+    //     va_list apc;
+    //     Perl_va_copy(ap, apc);
+    //     sv = vnewSVpvf(fmt, &apc);
+    //     va_end(apc);
+    // #else
+    //     sv = vnewSVpvf(fmt, &ap);
+    // #endif
+    //     s = SvPV_const(sv, len);
+    //     wrote = PerlIO_write(f, s, len);
+    //     SvREFCNT_dec(sv);
+    //     return wrote;
+    // }
+
+    // #undef PerlIO_printf
+    // int
+    // PerlIO_printf(PerlIO *f, const char *fmt, ...)
+    // {
+    //     va_list ap;
+    //     int result;
+    //     va_start(ap, fmt);
+    //     result = PerlIO_vprintf(f, fmt, ap);
+    //     va_end(ap);
+    //     return result;
+    // }
+    //     int
+    // PerlIO_stdoutf(const char *fmt, ...)
+    // {
+    //     dTHX;
+    //     va_list ap;
+    //     int result;
+    //     va_start(ap, fmt);
+    //     result = PerlIO_vprintf(PerlIO_stdout(), fmt, ap);
+    //     va_end(ap);
+    //     return result;
+    // }
 };
 
 pub const IOBuf = struct {
@@ -112,6 +191,20 @@ pub fn close() void {}
 pub fn read() void {}
 pub fn write() void {}
 
+fn _write(f: IO, vbuf: []u8, count: usize) isize {
+    _ = f;
+    _ = vbuf;
+    _ = count;
+    return 0;
+}
+
+// const S = struct {
+pub fn foo(value: SV) SV {
+    std.debug.print("Hi!\n", .{});
+    return value;
+}
+// };
+
 pub fn IO_stdout() IO {
     // if (!perlio) {}
     // const stdout = io.getStdOut();
@@ -119,12 +212,26 @@ pub fn IO_stdout() IO {
     // const outw = std.io.getStdOut().writer();
     // return outw;
     // return io[2].next;
-    return .{};
+    return .{
+        .tab = IO_funcs.init(foo),
+        //fn (f: IO, vbuf: []u8, count: usize) isize{
+        // _ = f;
+        // _ = vbuf;
+        // _ = count;
+        // return 0},
+        // .Write = fn (f: *IO, vbuf: []u8, count: usize) isize{return f},
+        // .Write = fn (f: *IO, vbuf: []u8, count: usize) isize{return 1;},
+        // ?fn (f: *IO, vbuf: []u8, count: usize) isize
+
+        // },
+    };
 }
 
 test "basic" {
     try testing.expect(true);
     const stdout = IO_stdout();
+    _ = stdout.tab.?.func.?(.{ .IV = 3 });
 
-    _ = stdout;
+    // ?fn (f: IO, vbuf: []u8, count: usize) isize
+    // stdout.tab?.func(.{ .IV = 3 });
 }
