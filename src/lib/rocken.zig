@@ -16,6 +16,7 @@ const native_os = builtin.os.tag;
 const Async = @import("Async.zig");
 
 const Chunk = @import("Chunk.zig");
+const FFI = @import("FFI.zig");
 const handy = @import("handy.zig");
 
 const IO = @import("IO.zig");
@@ -81,6 +82,7 @@ test {
 test {
     _ = Async;
     _ = Chunk;
+    _ = FFI;
     _ = handy;
     _ = IO;
     _ = Scanner;
