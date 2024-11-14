@@ -1,5 +1,5 @@
 const std = @import("std");
-const SV = @import("SV.zig");
+const SV = @import("Value.zig").SV;
 const handy = @import("handy.zig");
 
 const debug = std.debug;
@@ -18,15 +18,21 @@ const native_os = builtin.os.tag;
 
 const use_gpa = (!builtin.link_libc) and native_os != .wasi;
 
-pub const OpCode = enum(u64) {
-    OP_RETURN,
-    pub fn isReturn(self: OpCode) bool {
-        return self == OpCode.OP_RETURN;
-    }
-};
+pub const OpCode = usize;
+
+pub const OP_CONSTANT: OpCode = 0;
+pub const OP_RETURN: OpCode = 1;
+// pub const OpCode = enum(usize) {
+// OP_CONSTANT,
+// OP_RETURN,
+
+// pub fn isReturn(self: OpCode) bool {
+//     return self == OpCode.OP_RETURN;
+// }
+// };
 
 const Chunky = struct {
-    code: ArrayList(OpCode),
+    code: ArrayList(usize),
     constants: ArrayList(SV),
 
     pub fn init(allocator: Allocator) !Chunky {
@@ -41,7 +47,7 @@ const Chunky = struct {
         self.constants.deinit();
     }
 
-    pub fn add(self: *Chunky, code: OpCode) error{OutOfMemory}!void {
+    pub fn add(self: *Chunky, code: usize) error{OutOfMemory}!void {
         try self.code.append(code);
     }
 
@@ -49,6 +55,14 @@ const Chunky = struct {
         debug.print("{s}\n", .{name});
         _ = self;
         return offset + 1;
+    }
+
+    pub fn constantInstruction(self: *Chunky, name: []const u8, offset: usize) usize {
+        debug.print("{s} @ {d}\n", .{ name, offset });
+        const value =
+            self.constants.items[self.code.items[offset + 1]];
+        debug.print("    {s} @ {d}\n", .{ name, value.asNumber() });
+        return offset + 2;
     }
 
     pub fn disassembleChunk(self: *Chunky, name: []const u8) !void {
@@ -59,15 +73,22 @@ const Chunky = struct {
             offset = self.disassembleInstruction(offset);
         }
     }
+
     pub fn disassembleInstruction(self: *Chunky, offset: usize) usize {
         debug.print("{d:05} ", .{offset});
         const instruction = self.code.items[offset];
         switch (instruction) {
-            .OP_RETURN => {
-                return self.simpleInstruction("OP_RETURN", offset);
-            },
-            // else => {},
+            OP_RETURN => return self.simpleInstruction("OP_RETURN", offset),
+            OP_CONSTANT => return self.constantInstruction("OP_CONSTANT", offset),
+            else => return 0,
         }
+    }
+
+    pub fn addConstant(self: *Chunky, value: SV) error{OutOfMemory}!usize {
+        try self.constants.append(value);
+        try self.add(OP_CONSTANT);
+        try self.add(self.constants.items.len - 1);
+        return self.constants.items.len;
     }
 };
 
@@ -79,7 +100,7 @@ test "writeChunk" {
     try testing.expect(chunky.code.items.len == 0);
     for (1..1025) |x| {
         _ = x;
-        try chunky.add(OpCode.OP_RETURN);
+        try chunky.add(OP_RETURN);
     }
     try testing.expect(chunky.code.capacity >= 1025);
     try testing.expect(chunky.code.items.len == 1024);
@@ -89,7 +110,24 @@ test "disassembleChunk" {
     const allocator = testing.allocator;
     var chunky = try Chunky.init(allocator);
     defer chunky.deinit();
-    try chunky.add(OpCode.OP_RETURN);
+    try chunky.add(OP_RETURN);
     try testing.expect(chunky.code.items.len == 1);
+    try chunky.disassembleChunk("Test");
+}
+
+test "writeConstant" {
+    const allocator = testing.allocator;
+    var chunky = try Chunky.init(allocator);
+    defer chunky.deinit();
+    _ = try chunky.addConstant(.{ .NV = 1.2 });
+    // chunky.add(OpCode.OP_CONSTANT, pos);
+    // try testing.expect(chunky.code.capacity >= 0);
+    // try testing.expect(chunky.code.items.len == 0);
+    // for (1..1025) |x| {
+    //     _ = x;
+    //     try chunky.add(OpCode.OP_RETURN);
+    // }
+    // try testing.expect(chunky.code.capacity >= 1025);
+    // try testing.expect(chunky.code.items.len == 1024);
     try chunky.disassembleChunk("Test");
 }

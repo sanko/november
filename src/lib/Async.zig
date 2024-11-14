@@ -4,7 +4,7 @@ const net = std.net;
 const mem = std.mem;
 const testing = std.testing;
 const thread = std.Thread;
-const SV = @import("SV.zig").SV;
+const SV = @import("Value.zig").SV;
 // const test = std.testing;
 
 // const expect = test.expect;

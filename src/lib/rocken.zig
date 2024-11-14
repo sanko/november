@@ -18,11 +18,9 @@ const Async = @import("Async.zig");
 const Chunk = @import("Chunk.zig");
 const FFI = @import("FFI.zig");
 const handy = @import("handy.zig");
-
 const IO = @import("IO.zig");
-
 const Scanner = @import("Scanner.zig");
-const SV = @import("SV.zig");
+const SV = @import("Value.zig");
 const token = @import("Token.zig");
 const Token = token.Token;
 const TokenType = token.TokenType;
