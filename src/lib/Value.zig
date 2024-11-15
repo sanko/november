@@ -114,7 +114,7 @@ const use_gpa = (!builtin.link_libc) and native_os != .wasi;
 
 const PV = struct {
     pv: []const u8,
-    dual: ?*SV, // TODO: Allow values to have dualvars!
+    dual: ?*SV = null, // TODO: Allow values to have dualvars!
     pub fn init(string: []const u8) !PV {
         return .{ .pv = string, .dual = null };
     }
@@ -302,6 +302,10 @@ pub const SV = union(enum) {
         std.debug.assert(self.NOK());
         return self.NV;
     }
+    pub fn asString(self: SV) []const u8 {
+        std.debug.assert(self.PvOK());
+        return self.PV.pv;
+    }
 
     //     pub fn asObj(self: SV) *Obj {
     //         std.debug.assert(self.isObj());
@@ -372,35 +376,25 @@ pub const SV = union(enum) {
             // .Obj => |obj| try printObject(obj, out_stream),
         }
     }
+    // Shared between the two value representations
+    fn stringify(self: SV) ![]u8 {
+        var buf = [_]u8{0} ** 4096;
+        switch (self) {
+            .PV => return try std.fmt.bufPrint(&buf, "{s}", .{self.PV.pv}),
+            .IV => return try std.fmt.bufPrint(&buf, "{d}", .{self.IV}), //std.debug.print("{d}", .{obj.IV}),
+            .NV => return try std.fmt.bufPrint(&buf, "{d}", .{self.NV}),
+            .UV => return try std.fmt.bufPrint(&buf, "{d}", .{self.UV}),
+            else => return "",
+        }
+    }
 };
 
-// // Shared between the two value representations
-// fn printObject(obj: *Obj, out_stream: anytype) !void {
-//     switch (obj.objType) {
-//         .String => try out_stream.print("{s}", .{obj.asString().bytes}),
-//         .Function => {
-//             const name = if (obj.asFunction().name) |str| str.bytes else "<script>";
-//             try out_stream.print("<fn {s}>", .{name});
-//         },
-//         .NativeFunction => {
-//             try out_stream.print("<native fn>", .{});
-//         },
-//         .Closure => {
-//             const name = if (obj.asClosure().function.name) |str| str.bytes else "<script>";
-//             try out_stream.print("<fn {s}>", .{name});
-//         },
-//         .Upvalue => {
-//             try out_stream.print("upvalue", .{});
-//         },
-//         .Class => {
-//             try out_stream.print("{s}", .{obj.asClass().name.bytes});
-//         },
-//         .Instance => {
-//             try out_stream.print("{s} instance", .{obj.asInstance().class.name.bytes});
-//         },
-//         .BoundMethod => {
-//             const name = if (obj.asBoundMethod().method.function.name) |str| str.bytes else "<script>";
-//             try out_stream.print("<fn {s}>", .{name});
-//         },
-//     }
-// }
+test "here we go..." {
+    try testing.expect(true);
+    var sv: SV = .{ .IV = 10 };
+    try testing.expectEqualStrings("10", try sv.stringify());
+    sv = SV{ .PV = .{ .pv = "YES\n" } };
+    try testing.expectEqualStrings("YES\n", try sv.stringify());
+    sv = SV{ .NV = 1_000_000.394 };
+    try testing.expectEqualStrings("1000000.394", try sv.stringify());
+}
