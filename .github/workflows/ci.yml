@@ -1,0 +1,82 @@
+name: CI
+on:
+  pull_request: ~
+  push: ~
+  schedule:
+    - cron: 42 5 * * 0
+  workflow_dispatch: ~
+jobs:
+  macos:
+    name: "[${{ matrix.os == 'macos-13' && 'Intel' || 'M1' }}] macOS"
+    needs:
+      - setup
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - macos-13
+    runs-on: '${{ matrix.os }}'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v1.2.1
+        with:
+          version: 0.14.0-dev.2211+05a3ac43e
+      - run: zig build test --summary all -freference-trace=10
+  linux:
+    name: "Linux"
+    needs:
+      - setup
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+    runs-on: '${{ matrix.os }}'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v1.2.1
+        with:
+          version: 0.14.0-dev.2211+05a3ac43e
+      - run: zig build test --summary all -freference-trace=10
+  win32:
+    name: "Windows"
+    needs:
+      - setup
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+    runs-on: '${{ matrix.os }}'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v1.2.1
+        with:
+          version: 0.14.0-dev.2211+05a3ac43e
+      - run: zig build test --summary all -freference-trace=10
+  results:
+    name: Results
+    needs:
+      - macos
+      - win32
+      - linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Okay
+        run: echo Test successful
+  setup:
+    name: Generate Testing Matrix
+    outputs:
+      matrix: '${{ steps.matrix.outputs.matrix }}'
+    runs-on: ubuntu-22.04
+    steps:
+      - env:
+          DATA: |
+            {
+              "platforms":  ["macos", "linux", "windows"],
+              "flags": [""]
+            }
+        id: matrix
+        run: |
+          jq -rn 'env.DATA | fromjson | @json "matrix=\(.)"' > $GITHUB_OUTPUT
