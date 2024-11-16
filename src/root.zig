@@ -4,6 +4,17 @@
 const std = @import("std");
 const testing = std.testing;
 
+pub const bytecode = @import("bytecode.zig");
+pub const chunk = @import("chunk.zig");
+pub const ffi = @import("ffi.zig");
+pub const fiber = @import("fiber.zig");
+pub const io = @import("io.zig");
+pub const jit = @import("jit.zig");
+pub const platform = @import("platform.zig");
+pub const scanner = @import("scanner.zig");
+pub const threads = @import("threads.zig");
+pub const tokenizer = @import("tokenizer.zig");
+pub const value = @import("value.zig");
 pub const vm = @import("vm.zig");
 pub const VM = vm.VM;
 
@@ -16,5 +27,5 @@ test "basic add functionality" {
 }
 
 test "suite" {
-    testing.refAllDecls(@This());
+    testing.refAllDeclsRecursive(@This());
 }
