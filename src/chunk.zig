@@ -1,6 +1,5 @@
 const std = @import("std");
-const SV = @import("Value.zig").SV;
-const handy = @import("handy.zig");
+const SV = @import("value.zig").SV;
 
 const debug = std.debug;
 const testing = std.testing;
@@ -22,50 +21,45 @@ pub const OpCode = usize;
 
 pub const OP_CONSTANT: OpCode = 0;
 pub const OP_RETURN: OpCode = 1;
-// pub const OpCode = enum(usize) {
-// OP_CONSTANT,
-// OP_RETURN,
 
-// pub fn isReturn(self: OpCode) bool {
-//     return self == OpCode.OP_RETURN;
-// }
-// };
-
-const Chunky = struct {
-    code: ArrayList(usize),
+pub const Chunk = struct {
+    code: ArrayList(OpCode),
     constants: ArrayList(SV),
+    lines: ArrayList(usize),
 
-    pub fn init(allocator: Allocator) !Chunky {
+    pub fn init(allocator: Allocator) !Chunk {
         return .{
             .code = std.ArrayList(OpCode).init(allocator),
             .constants = std.ArrayList(SV).init(allocator),
+            .lines = std.ArrayList(usize).init(allocator),
         };
     }
 
-    pub fn deinit(self: Chunky) void {
+    pub fn deinit(self: Chunk) void {
         self.code.deinit();
         self.constants.deinit();
+        self.lines.deinit();
     }
 
-    pub fn add(self: *Chunky, code: usize) error{OutOfMemory}!void {
+    pub fn add(self: *Chunk, code: usize) error{OutOfMemory}!void {
         try self.code.append(code);
     }
 
-    pub fn simpleInstruction(self: *Chunky, name: []const u8, offset: usize) usize {
+    pub fn simpleInstruction(self: *Chunk, name: []const u8, offset: usize) usize {
         debug.print("{s}\n", .{name});
         _ = self;
         return offset + 1;
     }
 
-    pub fn constantInstruction(self: *Chunky, name: []const u8, offset: usize) usize {
+    pub fn constantInstruction(self: *Chunk, name: []const u8, offset: usize) usize {
         debug.print("{s} @ {d}\n", .{ name, offset });
         const value =
             self.constants.items[self.code.items[offset + 1]];
-        debug.print("    {s} @ {d}\n", .{ name, value.asNumber() });
+        debug.print("    {s} @ {d}\n", .{ name, value.NV });
         return offset + 2;
     }
 
-    pub fn disassembleChunk(self: *Chunky, name: []const u8) !void {
+    pub fn disassembleChunk(self: *Chunk, name: []const u8) !void {
         debug.print("== {s} ==\n", .{name});
         var offset: usize = 0;
         const y = self.code.items.len;
@@ -74,7 +68,7 @@ const Chunky = struct {
         }
     }
 
-    pub fn disassembleInstruction(self: *Chunky, offset: usize) usize {
+    pub fn disassembleInstruction(self: *Chunk, offset: usize) usize {
         debug.print("{d:05} ", .{offset});
         const instruction = self.code.items[offset];
         switch (instruction) {
@@ -84,7 +78,7 @@ const Chunky = struct {
         }
     }
 
-    pub fn addConstant(self: *Chunky, value: SV) error{OutOfMemory}!usize {
+    pub fn addConstant(self: *Chunk, value: SV) error{OutOfMemory}!usize {
         try self.constants.append(value);
         try self.add(OP_CONSTANT);
         try self.add(self.constants.items.len - 1);
@@ -94,7 +88,7 @@ const Chunky = struct {
 
 test "writeChunk" {
     const allocator = testing.allocator;
-    var chunky = try Chunky.init(allocator);
+    var chunky = try Chunk.init(allocator);
     defer chunky.deinit();
     try testing.expect(chunky.code.capacity >= 0);
     try testing.expect(chunky.code.items.len == 0);
@@ -108,7 +102,7 @@ test "writeChunk" {
 
 test "disassembleChunk" {
     const allocator = testing.allocator;
-    var chunky = try Chunky.init(allocator);
+    var chunky = try Chunk.init(allocator);
     defer chunky.deinit();
     try chunky.add(OP_RETURN);
     try testing.expect(chunky.code.items.len == 1);
@@ -117,7 +111,7 @@ test "disassembleChunk" {
 
 test "writeConstant" {
     const allocator = testing.allocator;
-    var chunky = try Chunky.init(allocator);
+    var chunky = try Chunk.init(allocator);
     defer chunky.deinit();
     _ = try chunky.addConstant(.{ .NV = 1.2 });
     // chunky.add(OpCode.OP_CONSTANT, pos);

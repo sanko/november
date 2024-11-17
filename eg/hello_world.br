@@ -1,3 +1,0 @@
-sub hi( $name //= 'World' ) {
-    warn "こんにちは、世界！Hello, $name!";
-}
