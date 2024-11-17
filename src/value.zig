@@ -3,12 +3,64 @@ const testing = std.testing;
 
 const Bool = bool;
 
-const AV = struct {};
+const AV = std.ArrayList(SV);
+
+test "AV" {
+    {
+        var av = AV.init(testing.allocator);
+        defer av.deinit();
+        try testing.expect(av.items.len == 0);
+        // try testing.expect(av.capacity >= 1);
+    }
+    {
+        var av = AV.init(testing.allocator);
+        defer av.deinit();
+
+        // push
+        {
+            var i: usize = 0;
+            while (i < 10) : (i += 1) {
+                av.append(.{ .IV = @as(i64, @intCast(i + 1)) }) catch unreachable;
+            }
+        }
+
+        try testing.expect(av.items.len == 10);
+        try testing.expect(av.capacity >= 10);
+
+        // pop
+        {
+            const sv = av.pop();
+            try testing.expectEqualStrings("10", try sv.stringify());
+        }
+
+        try testing.expect(av.items.len == 9);
+        // unshift
+        {
+            var hv = HV.init(testing.allocator);
+            // defer hv.deinit(); // Do not free here!
+            try hv.put("Stored", .{ .IV = 99999 });
+
+            try av.insert(0, .{ .HV = hv });
+        }
+        try testing.expect(av.items.len == 10);
+
+        try testing.expect(av.capacity >= 10);
+        // shift
+        {
+            var hv = av.orderedRemove(0).HV;
+            try testing.expectEqual(1, hv.count());
+            const stored = hv.get("Stored").?;
+            try testing.expectEqual(99999, stored.IV);
+            defer hv.deinit(); // Freed here but init in unshift above
+        }
+        try testing.expect(av.items.len == 9);
+        try testing.expect(av.capacity >= 10);
+    }
+}
 
 const HV = std.hash_map.StringHashMap(SV);
 
 test "HV" {
-    try testing.expect(true);
     var hv = HV.init(testing.allocator);
     defer hv.deinit();
 
