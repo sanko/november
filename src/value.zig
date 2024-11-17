@@ -43,7 +43,6 @@ test "AV" {
             try av.insert(0, .{ .HV = hv });
         }
         try testing.expect(av.items.len == 10);
-
         try testing.expect(av.capacity >= 10);
         // shift
         {
