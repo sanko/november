@@ -1,8 +1,15 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const mem = std.mem;
 const native_os = builtin.os.tag;
 const testing = std.testing;
 const heap = std.heap;
+
+/// While a release is in development, this string should contain the version in development
+/// with the "-dev" suffix.
+/// When a release is tagged, the "-dev" suffix should be removed for the commit that gets tagged.
+/// Directly after the tagged commit, the version should be bumped and the "-dev" suffix added.
+const version = "0.0.1-dev";
 
 const use_gpa = (!builtin.link_libc) and native_os != .wasi;
 
@@ -21,6 +28,30 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
+    const full_version = blk: {
+        if (mem.endsWith(u8, version, "-dev")) {
+            var ret: u8 = undefined;
+
+            const git_describe_long = b.runAllowFail(
+                &.{ "git", "-C", b.build_root.path orelse ".", "describe", "--long", "--all" },
+                &ret,
+                .Inherit,
+            ) catch break :blk version;
+
+            var it = mem.splitSequence(u8, mem.trim(u8, git_describe_long, &std.ascii.whitespace), "-");
+            _ = it.next().?; // previous tag
+            const commit_count = it.next().?;
+            const commit_hash = it.next().?;
+            // assert(it.next() == null);
+            // assert(commit_hash[0] == 'g');
+
+            // Follow semantic versioning, e.g. 0.2.0-dev.42+d1cf95b
+            break :blk b.fmt(version ++ ".{s}+{s}", .{ commit_count, commit_hash[1..] });
+        } else {
+            break :blk version;
+        }
+    };
+
     const lib = b.addStaticLibrary(.{
         .name = "roken",
         // In this case the main source file is merely a path, however, in more
@@ -35,12 +66,11 @@ pub fn build(b: *std.Build) void {
     // running `zig build`).
     b.installArtifact(lib);
 
-    const exe = b.addExecutable(.{
-        .name = "brocken",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+    const exe = b.addExecutable(.{ .name = "brocken", .root_source_file = b.path("src/main.zig"), .target = target, .optimize = optimize, .version = .{ .major = 0, .minor = 14, .patch = 0 } });
+
+    const options = b.addOptions();
+    options.addOption([]const u8, "version", full_version);
+    exe.root_module.addOptions("build_options", options);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
