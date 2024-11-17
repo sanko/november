@@ -198,8 +198,7 @@ fn mainTerminal() void {
 
     var leaks: usize = 0;
 
-    std.debug.print("1..{d}\n", .{test_fn_list.len});
-
+    std.fmt.format(stdout, "1..{d}\n", .{test_fn_list.len}) catch @panic("std.fmt.format failed?!");
     for (test_fn_list, 1..) |test_fn, i| {
         testing.allocator_instance = .{};
         defer {
@@ -211,14 +210,14 @@ fn mainTerminal() void {
 
         const test_node = root_node.start(test_fn.name, 0);
         if (!have_tty) {
-            std.debug.print("{d}/{d} {s}...", .{ i + 1, test_fn_list.len, test_fn.name });
+            // std.debug.print("{d}/{d} {s}...", .{ i + 1, test_fn_list.len, test_fn.name });
         }
         is_fuzz_test = false;
         if (test_fn.func()) |_| {
             ok_count += 1;
             test_node.end();
             // if (!have_tty)
-            std.debug.print("ok {d} - {s}\n", .{ i, test_fn.name });
+            std.fmt.format(stdout, "ok {d} - {s}\n", .{ i, test_fn.name }) catch @panic("std.fmt.format failed?!");
         } else |err| switch (err) {
             error.SkipZigTest => {
                 skip_count += 1;
@@ -231,11 +230,11 @@ fn mainTerminal() void {
             },
             else => {
                 fail_count += 1;
-                std.debug.print("not ok {d} - {s}\n    {s}\n", .{
+                std.fmt.format(stdout, "not ok {d} - {s}\n    {s}\n", .{
                     i,
                     test_fn.name,
                     @errorName(err),
-                });
+                }) catch @panic("std.fmt.format failed?!");
                 if (@errorReturnTrace()) |trace| {
                     std.debug.dumpStackTrace(trace.*);
                 }

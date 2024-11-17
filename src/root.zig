@@ -8,6 +8,7 @@ pub const bytecode = @import("bytecode.zig");
 pub const chunk = @import("chunk.zig");
 pub const ffi = @import("ffi.zig");
 pub const fiber = @import("fiber.zig");
+pub const handy = @import("handy.zig");
 pub const io = @import("io.zig");
 pub const jit = @import("jit.zig");
 pub const platform = @import("platform.zig");
