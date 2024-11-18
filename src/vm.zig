@@ -1,9 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const build_options = @import("build_options");
-const SV = @import("value.zig");
-const AV = SV.AV;
-const HV = SV.HV;
+const SV = @import("value.zig").SV;
 const chunk_ = @import("chunk.zig");
 const Chunk = chunk_.Chunk;
 const OpCode = chunk_.OpCode;
@@ -20,8 +18,9 @@ pub const VM = struct {
     chunk: Chunk,
 
     pub fn init(self: *VM, alloc: std.mem.Allocator, chunk: Chunk) !void {
-        var av = AV{};
-        defer av.deinit(alloc);
+        var av: SV = .{ .AV = std.MultiArrayList(SV){} };
+        defer av.AV.deinit(alloc);
+
         self.* = .{ // lvalue!
             .allocator = alloc,
             .stack = std.ArrayList(SV).init(alloc),
