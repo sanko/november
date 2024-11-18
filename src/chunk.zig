@@ -42,9 +42,9 @@ pub const Chunk = struct {
 
     pub fn deinit(self: *Chunk) void {
         self.code.deinit();
-        var consts = self.constants;
+        //var consts = self.constants;
         self.constants.clearAndFree(self.alloc);
-        consts.deinit(self.alloc);
+        //consts.deinit(self.alloc);
         self.lines.deinit();
     }
 

@@ -35,58 +35,66 @@ test "AV" {
 
         try testing.expect(av.len == 9);
         // unshift
-        {
-            var hv = HV.init(testing.allocator);
-            // defer hv.deinit(); // Do not free here!
-            try hv.put("Stored", .{ .IV = 99999 });
+        // {
+        //     var hv = HV.init(testing.allocator);
+        //     // defer hv.deinit(); // Do not free here!
+        //     try hv.put("Stored", .{ .IV = 99999 });
 
-            try av.insert(testing.allocator, 0, .{ .HV = hv });
-        }
-        try testing.expect(av.len == 10);
-        try testing.expect(av.capacity >= 10);
+        //     try av.insert(testing.allocator, 0, .{ .HV = hv });
+
+        //         try testing.expect(av.len == 10);
+        // try testing.expect(av.capacity >= 10);
+        // }
+
         // shift
-        {
-            var hv = av.get(0).HV;
-            av.orderedRemove(0);
-            try testing.expectEqual(1, hv.count());
-            const stored = hv.get("Stored").?;
-            try testing.expectEqual(99999, stored.IV);
-            defer hv.deinit(); // Freed here but init in unshift above
-        }
-        try testing.expect(av.len == 9);
-        try testing.expect(av.capacity >= 10);
+        // {
+        //     var hv = av.get(0).HV;
+        //     av.orderedRemove(0);
+        //     try testing.expectEqual(1, hv.count());
+        //     const stored = hv.get("Stored").?;
+        //     try testing.expectEqual(99999, stored.IV);
+        //     defer hv.deinit(); // Freed here but init in unshift above
+
+        //     try testing.expect(av.len == 9);
+        //     try testing.expect(av.capacity >= 10);
+        // }
     }
 }
 
-pub const HV = std.hash_map.StringHashMap(SV);
+// pub const HV = std.StringHashMap(SV);
 
-test "HV" {
-    var hv = HV.init(testing.allocator);
-    defer hv.deinit();
+// test "HV" {
+//     var hv = HV.init(testing.allocator);
+//     defer {
+//         var key_iter = hv.keyIterator();
+//         while (key_iter.next()) |key| {
+//             testing.allocator.free(key.*);
+//         }
+//         hv.deinit();
+//     }
+//     try hv.put("int", .{ .IV = 100 });
+//     try hv.put("str", .{ .PV = .{ .pv = "Test" } });
 
-    try hv.put("int", .{ .IV = 100 });
-    try hv.put("str", .{ .PV = .{ .pv = "Test" } });
+//     try testing.expectEqual(2, hv.count());
 
-    try testing.expectEqual(2, hv.count());
+//     var key_ptr = hv.getKeyPtr("int");
+//     try testing.expect(key_ptr != null);
 
-    var key_ptr = hv.getKeyPtr("int");
-    try testing.expect(key_ptr != null);
+//     key_ptr = hv.getKeyPtr("int");
+//     try testing.expect(key_ptr != null);
 
-    key_ptr = hv.getKeyPtr("int");
-    try testing.expect(key_ptr != null);
+//     const iv = hv.get("int").?;
+//     const pv = hv.get("str").?;
 
-    const iv = hv.get("int").?;
-    const pv = hv.get("str").?;
+//     try testing.expectEqualStrings("100", try iv.stringify());
+//     try testing.expectEqualStrings("Test", try pv.stringify());
 
-    try testing.expectEqualStrings("100", try iv.stringify());
-    try testing.expectEqualStrings("Test", try pv.stringify());
+//     if (key_ptr) |ptr| {
+//         hv.removeByPtr(ptr);
+//     }
 
-    if (key_ptr) |ptr| {
-        hv.removeByPtr(ptr);
-    }
-
-    try testing.expect(hv.count() == 1);
-}
+//     try testing.expect(hv.count() == 1);
+// }
 
 pub const IV = i64;
 
@@ -113,7 +121,7 @@ pub const SV = union(enum) {
     Undef,
     Bool: Bool,
     AV: AV,
-    HV: HV,
+    // HV: HV,
     IV: IV,
     NV: NV,
     PV: PV,
