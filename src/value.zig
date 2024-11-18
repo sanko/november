@@ -1,30 +1,30 @@
 const std = @import("std");
 const testing = std.testing;
 
-const Bool = bool;
+pub const Bool = bool;
 
-const AV = std.ArrayList(SV);
+pub const AV = std.MultiArrayList(SV);
 
 test "AV" {
     {
-        var av = AV.init(testing.allocator);
-        defer av.deinit();
-        try testing.expect(av.items.len == 0);
+        var av: AV = std.MultiArrayList(SV){};
+        defer av.deinit(testing.allocator);
+        try testing.expect(av.len == 0);
         // try testing.expect(av.capacity >= 1);
     }
     {
-        var av = AV.init(testing.allocator);
-        defer av.deinit();
+        var av = AV{};
+        defer av.deinit(testing.allocator);
 
         // push
         {
             var i: usize = 0;
             while (i < 10) : (i += 1) {
-                av.append(.{ .IV = @as(i64, @intCast(i + 1)) }) catch unreachable;
+                av.append(testing.allocator, .{ .IV = @as(i64, @intCast(i + 1)) }) catch unreachable;
             }
         }
 
-        try testing.expect(av.items.len == 10);
+        try testing.expect(av.len == 10);
         try testing.expect(av.capacity >= 10);
 
         // pop
@@ -33,31 +33,32 @@ test "AV" {
             try testing.expectEqualStrings("10", try sv.stringify());
         }
 
-        try testing.expect(av.items.len == 9);
+        try testing.expect(av.len == 9);
         // unshift
         {
             var hv = HV.init(testing.allocator);
             // defer hv.deinit(); // Do not free here!
             try hv.put("Stored", .{ .IV = 99999 });
 
-            try av.insert(0, .{ .HV = hv });
+            try av.insert(testing.allocator, 0, .{ .HV = hv });
         }
-        try testing.expect(av.items.len == 10);
+        try testing.expect(av.len == 10);
         try testing.expect(av.capacity >= 10);
         // shift
         {
-            var hv = av.orderedRemove(0).HV;
+            var hv = av.get(0).HV;
+            av.orderedRemove(0);
             try testing.expectEqual(1, hv.count());
             const stored = hv.get("Stored").?;
             try testing.expectEqual(99999, stored.IV);
             defer hv.deinit(); // Freed here but init in unshift above
         }
-        try testing.expect(av.items.len == 9);
+        try testing.expect(av.len == 9);
         try testing.expect(av.capacity >= 10);
     }
 }
 
-const HV = std.hash_map.StringHashMap(SV);
+pub const HV = std.hash_map.StringHashMap(SV);
 
 test "HV" {
     var hv = HV.init(testing.allocator);
@@ -87,15 +88,26 @@ test "HV" {
     try testing.expect(hv.count() == 1);
 }
 
-const IV = i64;
+pub const IV = i64;
 
-const NV = f64;
+pub const NV = f64;
 
-const PV = struct { pv: []const u8, num: ?union(enum) { IV, NV, UV } = null };
+pub const PV = struct { pv: []const u8, num: ?union(enum) { IV, NV, UV } = null };
 
-const UV = u64;
+test "PV" {
+    try testing.expect(true);
+    var pv: SV = .{ .PV = .{ .pv = "Hello" } };
+    try testing.expectEqualStrings("Hello", try pv.stringify());
+    // try testing.expectEqual(0, pv.PV.num.?);
+    // sv = SV{ .PV = .{ .pv = "YES\n" } };
+    // try testing.expectEqualStrings("YES\n", try sv.stringify());
+    // sv = SV{ .NV = 1_000_000.394 };
+    // try testing.expectEqualStrings("1000000.394", try sv.stringify());
+}
 
-const RV = *SV;
+pub const UV = u64;
+
+pub const RV = *SV;
 
 pub const SV = union(enum) {
     Undef,
@@ -139,10 +151,12 @@ pub const SV = union(enum) {
     }
 };
 
-test "PV" {
+test "SV" {
     try testing.expect(true);
-    var pv: SV = .{ .PV = .{ .pv = "Hello" } };
-    try testing.expectEqualStrings("Hello", try pv.stringify());
+    const sv: SV = .Undef;
+    _ = sv;
+    // var pv: SV = .{ .PV = .{ .pv = "Hello" } };
+    // try testing.expectEqualStrings("Hello", try pv.stringify());
     // try testing.expectEqual(0, pv.PV.num.?);
     // sv = SV{ .PV = .{ .pv = "YES\n" } };
     // try testing.expectEqualStrings("YES\n", try sv.stringify());
