@@ -57,6 +57,20 @@ const usage: []const u8 =
     \\
 ;
 
+const usage_help_run: []const u8 =
+    \\Brocken. Squint.
+    \\Usage: {?s} run [options]
+    \\
+    \\Commands:
+    \\
+    \\  run              Create executable and run immediately 
+    \\
+    \\General Options:
+    \\
+    \\  -h, --help       Print command-specific usage
+    \\
+;
+
 pub fn main() !void {
     if (builtin.os.tag == .windows) {
         prevWinConsoleOutputCP = std.os.windows.kernel32.GetConsoleOutputCP();
@@ -94,7 +108,7 @@ pub fn main() !void {
 
     exe = args[0];
 
-    try exit(try mainArgs(allocator, args, env));
+    try exit(try mainArgs(allocator, args[1..], env));
 }
 
 fn mainArgs(allocator: mem.Allocator, args: []const []const u8, env: process.EnvMap) !u8 {
@@ -102,14 +116,16 @@ fn mainArgs(allocator: mem.Allocator, args: []const []const u8, env: process.Env
 
     std.debug.print("args.length: {d}\n", .{args.len});
 
-    exe = args[0];
     // //  clear ; zig build run -- test
     // var i: usize = 1;
-    for (args[1..], 1..) |arg, i| {
+    for (args[0..], 1..) |arg, i| {
         std.debug.print("{d}: {s}\n", .{ i, arg });
 
         if (std.mem.eql(u8, arg, "build")) {} else if (std.mem.eql(u8, arg, "fetch")) {} else if (std.mem.eql(u8, arg, "init")) {} else if (std.mem.eql(u8, arg, "docs")) {} else if (std.mem.eql(u8, arg, "build-exe")) {} else if (std.mem.eql(u8, arg, "build-lib")) {} else if (std.mem.eql(u8, arg, "build-obj")) {} else if (std.mem.eql(u8, arg, "test")) {} else if (std.mem.eql(u8, arg, "fmt")) {} else if (std.mem.eql(u8, arg, "help")) {
-            std.debug.print(usage, .{exe});
+            if (args.len > 1 and std.mem.eql(u8, args[1], "run"))
+                std.debug.print(usage_help_run, .{exe})
+            else
+                std.debug.print(usage, .{exe});
         } else if (std.mem.eql(u8, arg, "repl")) {} else if (std.mem.eql(u8, arg, "run")) {} else if (std.mem.eql(u8, arg, "env")) {} else if (std.mem.eql(u8, arg, "version")) {
             std.debug.print("Brocken v{s}", .{if (builtin.is_test) "ersion unknown in test build" else build_options.version});
             try exit(0);
@@ -135,7 +151,14 @@ fn mainArgs(allocator: mem.Allocator, args: []const []const u8, env: process.Env
 }
 test "help" {
     const alloc = std.testing.allocator;
-    const args = &.{ "fake.exe", "help" };
+    const args = &.{"help"};
+    var env = try process.getEnvMap(alloc);
+    defer env.deinit();
+    try testing.expectEqual(0, try mainArgs(alloc, args, env));
+}
+test "help run" {
+    const alloc = std.testing.allocator;
+    const args = &.{ "help", "run" };
     var env = try process.getEnvMap(alloc);
     defer env.deinit();
     try testing.expectEqual(0, try mainArgs(alloc, args, env));
@@ -143,7 +166,7 @@ test "help" {
 
 test "version" {
     const alloc = std.testing.allocator;
-    const args = &.{ "fake.exe", "version" };
+    const args = &.{"version"};
     var env = try process.getEnvMap(alloc);
     defer env.deinit();
     try testing.expectEqual(0, try mainArgs(alloc, args, env));
