@@ -32,9 +32,9 @@ const usage: []const u8 =
     \\
     \\Commands:
     \\
-    \\  run              Create executable and run immediately 
+    \\  run              Create executable and run immediately
     \\  repl             Run a REPL. Same as running without a command
-    \\ 
+    \\
     \\  build            Build project from meta.json
     \\  fetch            Copy a package into global cache and print its hash
     \\  init             Initialize a package in the current directory
@@ -63,7 +63,7 @@ const usage_help_run: []const u8 =
     \\
     \\Commands:
     \\
-    \\  run              Create executable and run immediately 
+    \\  run              Create executable and run immediately
     \\
     \\General Options:
     \\
@@ -118,22 +118,21 @@ fn mainArgs(allocator: mem.Allocator, args: []const []const u8, env: process.Env
 
     // //  clear ; zig build run -- test
     // var i: usize = 1;
-    for (args[0..], 1..) |arg, i| {
-        std.debug.print("{d}: {s}\n", .{ i, arg });
 
-        if (std.mem.eql(u8, arg, "build")) {} else if (std.mem.eql(u8, arg, "fetch")) {} else if (std.mem.eql(u8, arg, "init")) {} else if (std.mem.eql(u8, arg, "docs")) {} else if (std.mem.eql(u8, arg, "build-exe")) {} else if (std.mem.eql(u8, arg, "build-lib")) {} else if (std.mem.eql(u8, arg, "build-obj")) {} else if (std.mem.eql(u8, arg, "test")) {} else if (std.mem.eql(u8, arg, "fmt")) {} else if (std.mem.eql(u8, arg, "help")) {
-            if (args.len > 1 and std.mem.eql(u8, args[1], "run"))
-                std.debug.print(usage_help_run, .{exe})
-            else
-                std.debug.print(usage, .{exe});
-        } else if (std.mem.eql(u8, arg, "repl")) {} else if (std.mem.eql(u8, arg, "run")) {} else if (std.mem.eql(u8, arg, "env")) {} else if (std.mem.eql(u8, arg, "version")) {
-            std.debug.print("Brocken v{s}", .{if (builtin.is_test) "ersion unknown in test build" else build_options.version});
-            try exit(0);
-        } else if (arg[0] == '-') {
-            if (std.mem.eql(u8, arg, "--help")) {}
-        } else {
-            std.debug.print("Error: Unknown parameter ({s})", .{arg});
-        }
+    //    std.debug.print("{d}: {s}\n", .{ args.len, args[0] });
+
+    if (std.mem.eql(u8, args[0], "build")) {} else if (std.mem.eql(u8, args[0], "fetch")) {} else if (std.mem.eql(u8, args[0], "init")) {} else if (std.mem.eql(u8, args[0], "docs")) {} else if (std.mem.eql(u8, args[0], "build-exe")) {} else if (std.mem.eql(u8, args[0], "build-lib")) {} else if (std.mem.eql(u8, args[0], "build-obj")) {} else if (std.mem.eql(u8, args[0], "test")) {} else if (std.mem.eql(u8, args[0], "fmt")) {} else if (std.mem.eql(u8, args[0], "help")) {
+        if (args.len > 1 and std.mem.eql(u8, args[1], "run")) {
+            std.debug.print(usage_help_run, .{exe});
+            return 0;
+        } else std.debug.print(usage, .{exe});
+    } else if (std.mem.eql(u8, args[0], "repl")) {} else if (std.mem.eql(u8, args[0], "run")) {} else if (std.mem.eql(u8, args[0], "env")) {} else if (std.mem.eql(u8, args[0], "version")) {
+        std.debug.print("Brocken v{s}", .{if (builtin.is_test) "ersion unknown in test build" else build_options.version});
+        try exit(0);
+    } else if (args[0][0] == '-') {
+        if (std.mem.eql(u8, args[0], "--help")) {}
+    } else {
+        std.debug.print("Error: Unknown parameter ({s})", .{args[0]});
     }
 
     // try rvm.init(allocator);
