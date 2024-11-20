@@ -7,14 +7,15 @@ const std = @import("std");
 const heap = std.heap;
 const io = std.io;
 const mem = std.mem;
+const process = std.process;
 const Allocator = mem.Allocator;
 const builtin = @import("builtin");
 const native_os = builtin.os.tag;
 const testing = std.testing;
 pub const rocken = @import("root.zig");
 pub const vm = @import("vm.zig");
-
 pub const VM = vm.VM;
+pub const Chunk = @import("chunk.zig").Chunk;
 
 // https://utf8everywhere.org/
 const CP_UTF8 = 65001;
@@ -22,7 +23,7 @@ var prevWinConsoleOutputCP: u32 = undefined;
 
 const use_gpa = (!builtin.link_libc) and native_os != .wasi;
 
-var exe: []u8 = undefined;
+var exe: []const u8 = undefined;
 var rvm: rocken.VM = undefined;
 
 const usage: []const u8 =
@@ -86,22 +87,32 @@ pub fn main() !void {
 
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
-
     // std.debug.print("args.length: {d}\n", .{args.len});
 
+    var env = try process.getEnvMap(allocator);
+    defer env.deinit();
+
     exe = args[0];
-    //  clear ; zig build run -- test
-    var i: usize = 1;
-    var arg: []u8 = undefined;
-    while (i < args.len) : (i += 1) {
-        arg = args[i];
-        // std.debug.print("{d}: {s}\n", .{ i, args[i] });
+
+    try exit(try mainArgs(allocator, args, env));
+}
+
+fn mainArgs(allocator: mem.Allocator, args: []const []const u8, env: process.EnvMap) !u8 {
+    _ = env;
+
+    std.debug.print("args.length: {d}\n", .{args.len});
+
+    exe = args[0];
+    // //  clear ; zig build run -- test
+    // var i: usize = 1;
+    for (args[1..], 1..) |arg, i| {
+        std.debug.print("{d}: {s}\n", .{ i, arg });
 
         if (std.mem.eql(u8, arg, "build")) {} else if (std.mem.eql(u8, arg, "fetch")) {} else if (std.mem.eql(u8, arg, "init")) {} else if (std.mem.eql(u8, arg, "docs")) {} else if (std.mem.eql(u8, arg, "build-exe")) {} else if (std.mem.eql(u8, arg, "build-lib")) {} else if (std.mem.eql(u8, arg, "build-obj")) {} else if (std.mem.eql(u8, arg, "test")) {} else if (std.mem.eql(u8, arg, "fmt")) {} else if (std.mem.eql(u8, arg, "help")) {
             std.debug.print(usage, .{exe});
         } else if (std.mem.eql(u8, arg, "repl")) {} else if (std.mem.eql(u8, arg, "run")) {} else if (std.mem.eql(u8, arg, "env")) {} else if (std.mem.eql(u8, arg, "version")) {
-            std.debug.print("Brocken v{s}", .{build_options.version});
-            return;
+            std.debug.print("Brocken v{s}", .{if (builtin.is_test) "ersion unknown in test build" else build_options.version});
+            try exit(0);
         } else if (arg[0] == '-') {
             if (std.mem.eql(u8, arg, "--help")) {}
         } else {
@@ -109,8 +120,33 @@ pub fn main() !void {
         }
     }
 
-    try rvm.init(allocator);
+    // try rvm.init(allocator);
+    // defer rvm.deinit();
+
+    var chunky = try Chunk.init(allocator);
+    defer chunky.deinit();
+
+    try rvm.init(allocator, chunky);
     defer rvm.deinit();
+
+    return 0;
+    // exit(0);
+
+}
+test "help" {
+    const alloc = std.testing.allocator;
+    const args = &.{ "fake.exe", "help" };
+    var env = try process.getEnvMap(alloc);
+    defer env.deinit();
+    try testing.expectEqual(0, try mainArgs(alloc, args, env));
+}
+
+test "version" {
+    const alloc = std.testing.allocator;
+    const args = &.{ "fake.exe", "version" };
+    var env = try process.getEnvMap(alloc);
+    defer env.deinit();
+    try testing.expectEqual(0, try mainArgs(alloc, args, env));
 }
 
 test "simple test" {
@@ -118,4 +154,11 @@ test "simple test" {
     defer list.deinit(); // Try commenting this out and see if zig detects the memory leak!
     try list.append(42);
     try std.testing.expectEqual(@as(i32, 42), list.pop());
+}
+
+fn exit(code: u8) error{UncleanExit}!noreturn {
+    std.debug.lockStdErr();
+    process.exit(code);
+    if (code != 0)
+        return error{UncleanExit};
 }

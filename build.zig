@@ -52,7 +52,7 @@ pub fn build(b: *std.Build) void {
         }
     };
 
-    const lib = b.addStaticLibrary(.{
+    const rocken = b.addStaticLibrary(.{
         .name = "roken",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
@@ -60,27 +60,27 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    const brocken = b.addExecutable(.{ .name = "brocken", .root_source_file = b.path("src/main.zig"), .target = target, .optimize = optimize, .version = .{ .major = 0, .minor = 14, .patch = 0 } });
+
+    const options = b.addOptions();
+    options.addOption([]const u8, "version", full_version);
+    rocken.root_module.addOptions("build_options", options);
+    brocken.root_module.addOptions("build_options", options);
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
     // running `zig build`).
-    b.installArtifact(lib);
-
-    const exe = b.addExecutable(.{ .name = "brocken", .root_source_file = b.path("src/main.zig"), .target = target, .optimize = optimize, .version = .{ .major = 0, .minor = 14, .patch = 0 } });
-
-    const options = b.addOptions();
-    options.addOption([]const u8, "version", full_version);
-    exe.root_module.addOptions("build_options", options);
+    b.installArtifact(rocken);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).
-    b.installArtifact(exe);
+    b.installArtifact(brocken);
 
     // This *creates* a Run step in the build graph, to be executed when another
     // step is evaluated that depends on it. The next line below will establish
     // such a dependency.
-    const run_cmd = b.addRunArtifact(exe);
+    const run_cmd = b.addRunArtifact(brocken);
 
     // By making the run step depend on the install step, it will be run from the
     // installation directory rather than directly from within the cache directory.
@@ -102,30 +102,30 @@ pub fn build(b: *std.Build) void {
 
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
-    const lib_unit_tests = b.addTest(.{
+    const rocken_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
         .test_runner = b.path("src/test.zig"),
     });
 
-    const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
+    const run_rocken_unit_tests = b.addRunArtifact(rocken_unit_tests);
 
-    const exe_unit_tests = b.addTest(.{
+    const brocken_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
         .test_runner = b.path("src/test.zig"),
     });
 
-    const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
+    const run_brocken_unit_tests = b.addRunArtifact(brocken_unit_tests);
 
     // Similar to creating the run step earlier, this exposes a `test` step to
     // the `zig build --help` menu, providing a way for the user to request
     // running the unit tests.
     const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_lib_unit_tests.step);
-    test_step.dependOn(&run_exe_unit_tests.step);
+    test_step.dependOn(&run_rocken_unit_tests.step);
+    test_step.dependOn(&run_brocken_unit_tests.step);
 
     const step =
         add_t(b, target, optimize) catch {
