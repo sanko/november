@@ -114,19 +114,37 @@ pub fn main() !void {
 fn mainArgs(allocator: mem.Allocator, args: []const []const u8, env: process.EnvMap) !u8 {
     _ = env;
 
-    std.debug.print("args.length: {d}\n", .{args.len});
+    // std.debug.print("args.length: {d}\n", .{args.len});
 
     // //  clear ; zig build run -- test
     // var i: usize = 1;
 
-    //    std.debug.print("{d}: {s}\n", .{ args.len, args[0] });
-
-    if (std.mem.eql(u8, args[0], "build")) {} else if (std.mem.eql(u8, args[0], "fetch")) {} else if (std.mem.eql(u8, args[0], "init")) {} else if (std.mem.eql(u8, args[0], "docs")) {} else if (std.mem.eql(u8, args[0], "build-exe")) {} else if (std.mem.eql(u8, args[0], "build-lib")) {} else if (std.mem.eql(u8, args[0], "build-obj")) {} else if (std.mem.eql(u8, args[0], "test")) {} else if (std.mem.eql(u8, args[0], "fmt")) {} else if (std.mem.eql(u8, args[0], "help")) {
-        if (args.len > 1 and std.mem.eql(u8, args[1], "run")) {
-            std.debug.print(usage_help_run, .{exe});
-            return 0;
-        } else std.debug.print(usage, .{exe});
-    } else if (std.mem.eql(u8, args[0], "repl")) {} else if (std.mem.eql(u8, args[0], "run")) {} else if (std.mem.eql(u8, args[0], "env")) {} else if (std.mem.eql(u8, args[0], "version")) {
+    if (std.mem.eql(u8, args[0], "build")) {} //
+    else if (std.mem.eql(u8, args[0], "fetch")) {} //
+    else if (std.mem.eql(u8, args[0], "init")) {} //
+    else if (std.mem.eql(u8, args[0], "docs")) {} //
+    else if (std.mem.eql(u8, args[0], "build-exe")) {} //
+    else if (std.mem.eql(u8, args[0], "build-lib")) {} //
+    else if (std.mem.eql(u8, args[0], "build-obj")) {} //
+    else if (std.mem.eql(u8, args[0], "test")) {} //
+    else if (std.mem.eql(u8, args[0], "fmt")) {} //
+    else if (std.mem.eql(u8, args[0], "help")) {
+        if (args.len > 1) {
+            if (std.mem.eql(u8, args[1], "run")) {
+                std.debug.print(usage_help_run, .{exe});
+                return 0;
+            } else {
+                std.debug.print("Unknown command: {s}", .{args[1]});
+                return 1;
+            }
+        }
+        std.debug.print(usage, .{exe});
+        return 0;
+    } //
+    else if (std.mem.eql(u8, args[0], "repl")) {} //
+    else if (std.mem.eql(u8, args[0], "run")) {} //
+    else if (std.mem.eql(u8, args[0], "env")) {} //
+    else if (std.mem.eql(u8, args[0], "version")) {
         std.debug.print("Brocken v{s}", .{if (builtin.is_test) "ersion unknown in test build" else build_options.version});
         try exit(0);
     } else if (args[0][0] == '-') {

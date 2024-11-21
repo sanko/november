@@ -9,7 +9,6 @@ pub const SV = union(enum) {
     IV: i64,
     NV: f64,
     PV: struct { pv: []const u8, num: ?union(enum) { IV, NV, UV } = null },
-
     UV: u64,
     RV: *SV,
 
@@ -18,6 +17,9 @@ pub const SV = union(enum) {
     }
     pub fn isUndef(self: SV) bool {
         return self == .Undef;
+    }
+    pub fn SvOK(self: SV) bool {
+        return self != .Undef;
     }
     pub fn UOK(self: SV) bool {
         return self == .UV;
@@ -35,6 +37,7 @@ pub const SV = union(enum) {
     pub fn stringify(self: SV) ![]u8 {
         var buf = [_]u8{0} ** 4096;
         switch (self) {
+            .Undef => return try std.fmt.bufPrint(&buf, "undef", .{}),
             .PV => return try std.fmt.bufPrint(&buf, "{s}", .{self.PV.pv}),
             .IV => return try std.fmt.bufPrint(&buf, "{d}", .{self.IV}), //std.debug.print("{d}", .{obj.IV}),
             .NV => return try std.fmt.bufPrint(&buf, "{d}", .{self.NV}),
@@ -44,17 +47,11 @@ pub const SV = union(enum) {
     }
 };
 
-test "SV" {
+test "Undef" {
     try testing.expect(true);
     const sv: SV = .Undef;
-    _ = sv;
-    // var pv: SV = .{ .PV = .{ .pv = "Hello" } };
-    // try testing.expectEqualStrings("Hello", try pv.stringify());
-    // try testing.expectEqual(0, pv.PV.num.?);
-    // sv = SV{ .PV = .{ .pv = "YES\n" } };
-    // try testing.expectEqualStrings("YES\n", try sv.stringify());
-    // sv = SV{ .NV = 1_000_000.394 };
-    // try testing.expectEqualStrings("1000000.394", try sv.stringify());
+    try testing.expect(!sv.SvOK());
+    try testing.expectEqualStrings("undef", try sv.stringify());
 }
 
 test "HV" {
