@@ -1,39 +1,44 @@
 const std = @import("std");
-const math = std.math;
-const mem = std.mem;
-const Allocator = mem.Allocator;
+const SV = @import("value.zig").SV;
 
-const ascii = std.ascii;
-const unicode = std.unicode;
 const debug = std.debug;
 const testing = std.testing;
-const filesystem = std.fs;
-const heap = std.heap;
 
-const builtin = @import("builtin");
-const native_os = builtin.os.tag;
+// Don't create a type like this! Use an
+// arraylist with a fixed buffer allocator
+const MyByteList = struct {
+    data: [100]u8 = undefined,
+    items: []u8 = &[_]u8{},
 
-pub fn stderr(data: []const u8, length: usize, offset: isize) usize {
-    _ = length;
-    _ = offset;
-    std.debug.lockStdErr();
-    defer std.debug.unlockStdErr();
-    nosuspend std.io.getStdErr().writer().print("{s}", .{data}) catch return 0;
-    return data.len;
-}
+    const Writer = std.io.Writer(
+        *MyByteList,
+        error{EndOfBuffer},
+        appendWrite,
+    );
 
-pub fn stdout(data: []const u8, length: usize, offset: isize) usize {
-    _ = length;
-    _ = offset;
-    nosuspend std.io.getStdOut().writer().print("{s}", .{data}) catch return 0;
-    return data.len;
-}
+    fn appendWrite(
+        self: *MyByteList,
+        data: []const u8,
+    ) error{EndOfBuffer}!usize {
+        if (self.items.len + data.len > self.data.len) {
+            return error.EndOfBuffer;
+        }
+        @memcpy(
+            self.data[self.items.len..][0..data.len],
+            data,
+        );
+        self.items = self.data[0 .. self.items.len + data.len];
+        return data.len;
+    }
 
-test "STDOUT" {
-    _ = stdout("Oh, yeah", 7, 0);
-    try testing.expect(true);
-}
+    fn writer(self: *MyByteList) Writer {
+        return .{ .context = self };
+    }
+};
 
-test "STDIN" {
-    try testing.expect(true);
+test "custom writer" {
+    var bytes = MyByteList{};
+    _ = try bytes.writer().write("Hello");
+    _ = try bytes.writer().write(" Writer!");
+    try testing.expectEqualStrings(bytes.items, "Hello Writer!");
 }
