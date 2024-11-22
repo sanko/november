@@ -11,6 +11,8 @@ const io = std.io;
 const builtin = @import("builtin");
 const native_os = builtin.os.tag;
 
+pub const IS_WASM_FREESTANDING = builtin.target.isWasm() and builtin.target.os.tag == .freestanding;
+
 pub fn is_digit(c: u8) bool {
     return '0' <= c and c <= '9';
 }
