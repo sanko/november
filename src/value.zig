@@ -1,5 +1,10 @@
 const std = @import("std");
 const testing = std.testing;
+const Chunk = @import("chunk.zig").Chunk;
+
+pub const Type = struct {};
+
+pub const Object = struct { self: SV, arity: i32, upvalueCount: i32, chunk: Chunk, name: []u8 };
 
 pub const SV = union(enum) {
     Undef,
@@ -11,6 +16,16 @@ pub const SV = union(enum) {
     PV: struct { pv: []const u8, num: ?union(enum) { IV, NV, UV } = null },
     UV: u64,
     RV: *SV,
+    // CV: // code value (1st class func)
+    OV: struct { // class object
+        type: Type,
+        marked: bool,
+        // next: *SV.OV,
+    },
+    TV: struct {
+        name: []u8,
+        // constraint, etc.
+    },
 
     pub fn isBool(self: SV) bool {
         return self == .Bool;

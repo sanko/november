@@ -1,15 +1,33 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const build_options = @import("build_options");
-const SV = @import("value.zig").SV;
+const v = @import("value.zig");
+const SV = v.SV;
+const IV = v.SV.IV;
+const AV = v.SV.AV;
 const chunk_ = @import("chunk.zig");
 const Chunk = chunk_.Chunk;
 const OpCode = chunk_.OpCode;
 const testing = std.testing;
 
 const debug_trace: bool = true;
+pub const max_frames = 64;
+pub const max_stack = max_frames * @sizeOf(u8);
+
+pub fn clockNative(argCount: u32, args: []SV) SV {
+    _ = argCount;
+    _ = args;
+    return .{ .IV = std.time.timestamp() };
+}
 
 const InterpreterResult = enum { OK, COMPILE_ERROR, RUNTIME_ERROR };
+
+pub const Frame = struct {
+    //  ObjClosure* closure;
+
+    ip: std.ArrayList(u8),
+    slots: std.ArrayList(SV),
+};
 
 pub const VM = struct {
     allocator: std.mem.Allocator,
@@ -67,6 +85,12 @@ pub const VM = struct {
         }
 
         return InterpreterResult.OK;
+    }
+
+    pub fn interpret(self: VM, source: []u8) InterpreterResult {
+        _ = self;
+        _ = source;
+        return InterpreterResult.COMPILE_ERROR;
     }
 
     pub fn resetStack(self: *VM) void {
