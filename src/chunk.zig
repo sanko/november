@@ -48,8 +48,11 @@ pub const Chunk = struct {
         self.lines.deinit();
     }
 
-    pub fn add(self: *Chunk, code: OpCode) error{OutOfMemory}!void {
-        return self.code.append(code);
+    pub fn add(self: *Chunk, code: OpCode, line: usize) error{OutOfMemory}!void {
+        self.code.append(code) catch |err| {
+            return err;
+        };
+        return self.lines.append(line);
     }
 
     pub fn simpleInstruction(self: *Chunk, name: []const u8, offset: usize) usize {
@@ -102,7 +105,7 @@ test "writeChunk" {
     try testing.expect(chunky.code.items.len == 0);
     for (1..1025) |x| {
         _ = x;
-        try chunky.add(OP_RETURN);
+        try chunky.add(OP_RETURN, 1);
     }
     try testing.expect(chunky.code.capacity >= 1025);
     try testing.expect(chunky.code.items.len == 1024);
@@ -112,7 +115,7 @@ test "disassembleChunk" {
     const allocator = testing.allocator;
     var chunky = try Chunk.init(allocator);
     defer chunky.deinit();
-    try chunky.add(OP_RETURN);
+    try chunky.add(OP_RETURN, 1);
     try testing.expect(chunky.code.items.len == 1);
     try chunky.disassembleChunk("Test");
 }

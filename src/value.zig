@@ -15,7 +15,7 @@ pub const SV = union(enum) {
     NV: f64,
     PV: struct { pv: []const u8, num: ?union(enum) { IV, NV, UV } = null },
     UV: u64,
-    RV: *SV,
+    RV: struct { SV: *SV, package: ?[]u8 },
     // CV: // code value (1st class func)
     OV: struct { // class object
         type: Type,

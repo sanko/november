@@ -109,7 +109,7 @@ test "alpha" {
     var chunky = try Chunk.init(allocator);
     defer chunky.deinit();
     _ = try chunky.addConstant(.{ .NV = 1.2 });
-    try chunky.add(chunk_.OP_RETURN);
+    try chunky.add(chunk_.OP_RETURN, 1);
 
     var vm: VM = undefined;
     try vm.init(testing.allocator, chunky);
